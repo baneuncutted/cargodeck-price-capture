@@ -5,7 +5,7 @@
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -38,6 +38,9 @@ TEXT = {
     "save": ("Speichern", "Save"),
     "testshot": ("Screenshot testen", "Test screenshot"),
     "shot": ("Screenshot", "Screenshot"),
+    "screen": ("Bildschirm", "Screen"),
+    "scr_auto": ("Automatisch, der mit dem Spiel", "Automatic, the one with the game"),
+    "scr_all": ("Alle Bildschirme", "All screens"),
     "auto_sel": ("Automatisch wählen", "Pick automatically"),
     "stopped": ("Gestoppt", "Stopped"),
     "ready": ("Bereit", "Ready"),
@@ -76,7 +79,7 @@ def T(_key, **kw):
 # ---------------------------------------------------------------- Einstellungen
 DEFAULTS = {"url": "https://cargodeck.onrender.com", "code": "", "mode": "hotkey", "interval": 5,
             "scan_key": "<ctrl>+ö", "auto_key": "<ctrl>+ä", "sounds": True, "notify": True, "autostart": False,
-            "shot": "auto", "lang": ""}
+            "shot": "auto", "screen": "auto", "lang": ""}
 
 def load_conf():
     c = dict(DEFAULTS)
@@ -157,20 +160,113 @@ def _pil_grab():
     from PIL import ImageGrab
     return ImageGrab.grab()
 
+# ---------------------------------------------------------------- Nur der Bildschirm mit dem Spiel
+_last_mon = None   # zuletzt erkannter Bildschirm des Spiels
+_SELF_TITLE = "Cargo Deck Scanner"
+
+def monitors():
+    """Alle Bildschirme als (Name, x, y, Breite, Höhe) in X11 Koordinaten, auch unter XWayland."""
+    out = []
+    if os.environ.get("DISPLAY") and shutil.which("xrandr"):
+        try:
+            r = subprocess.run(["xrandr", "--listactivemonitors"], capture_output=True, text=True, timeout=5).stdout
+            for line in r.splitlines()[1:]:
+                m = re.search(r"(\d+)/\d+x(\d+)/\d+\+(-?\d+)\+(-?\d+)\s+(\S+)\s*$", line)
+                if m: out.append((m.group(5), int(m.group(3)), int(m.group(4)), int(m.group(1)), int(m.group(2))))
+        except Exception: pass
+    if not out and os.environ.get("DISPLAY"):
+        try:
+            from Xlib import display
+            from Xlib.ext import randr
+            d = display.Display()
+            for mo in randr.get_monitors(d.screen().root).monitors:
+                out.append((d.get_atom_name(mo.name), mo.x, mo.y, mo.width_in_pixels, mo.height_in_pixels))
+            d.close()
+        except Exception: pass
+    return out
+
+def _game_point():
+    """Mitte des aktiven Fensters, wenn es nicht der Scanner selbst ist. Sonst die Maus."""
+    if not os.environ.get("DISPLAY"): return None
+    try:
+        from Xlib import display, X
+        d = display.Display(); root = d.screen().root
+        try:
+            prop = root.get_full_property(d.intern_atom("_NET_ACTIVE_WINDOW"), X.AnyPropertyType)
+            wid = prop.value[0] if prop and len(prop.value) else 0
+            if wid:
+                w = d.create_resource_object("window", wid)
+                nm = w.get_full_property(d.intern_atom("_NET_WM_NAME"), 0)
+                name = (nm.value.decode("utf-8", "ignore") if nm and isinstance(nm.value, bytes) else str(nm.value) if nm else "") or (w.get_wm_name() or "")
+                if _SELF_TITLE not in str(name):
+                    g = w.get_geometry(); t = root.translate_coords(w, 0, 0)
+                    if g.width > 100 and g.height > 100: return (t.x + g.width // 2, t.y + g.height // 2)
+            p = root.query_pointer(); return (p.root_x, p.root_y)
+        finally: d.close()
+    except Exception: pass
+    if shutil.which("xdotool"):
+        try:
+            r = subprocess.run(["xdotool", "getmouselocation", "--shell"], capture_output=True, text=True, timeout=3).stdout
+            v = dict(l.split("=", 1) for l in r.split() if "=" in l); return (int(v["X"]), int(v["Y"]))
+        except Exception: pass
+    return None
+
+def pick_monitor(want="auto"):
+    """Bildschirm fürs Bild wählen: fest eingestellt, sonst der mit dem Spiel."""
+    global _last_mon
+    mons = monitors()
+    if len(mons) <= 1 or want == "all": return None, mons
+    if want not in ("auto", "", None):
+        for m in mons:
+            if m[0] == want: return m, mons
+    pt = _game_point()
+    if pt:
+        for m in mons:
+            if m[1] <= pt[0] < m[1] + m[3] and m[2] <= pt[1] < m[2] + m[4]:
+                _last_mon = m[0]; return m, mons
+    for m in mons:
+        if m[0] == _last_mon: return m, mons
+    return mons[0], mons
+
+def crop_to(im, mon, mons):
+    """Aus einem Bild aller Bildschirme nur den gewählten ausschneiden, auch bei Skalierung."""
+    if not mon or not mons: return im
+    x0 = min(m[1] for m in mons); y0 = min(m[2] for m in mons)
+    x1 = max(m[1] + m[3] for m in mons); y1 = max(m[2] + m[4] for m in mons)
+    sx, sy = im.width / max(1, x1 - x0), im.height / max(1, y1 - y0)
+    box = (round((mon[1] - x0) * sx), round((mon[2] - y0) * sy), round((mon[1] - x0 + mon[3]) * sx), round((mon[2] - y0 + mon[4]) * sy))
+    return im.crop(box)
+
+def _focused_wl_output():
+    """Unter Sway oder Hyprland den Bildschirm mit dem Fokus direkt fragen."""
+    try:
+        if shutil.which("swaymsg") and os.environ.get("SWAYSOCK"):
+            for o in json.loads(subprocess.run(["swaymsg", "-t", "get_outputs", "-r"], capture_output=True, text=True, timeout=3).stdout):
+                if o.get("focused"): return o.get("name")
+        if shutil.which("hyprctl") and os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+            for o in json.loads(subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=3).stdout):
+                if o.get("focused"): return o.get("name")
+    except Exception: pass
+    return None
+
+def _grim():
+    o = _focused_wl_output()
+    return (_run_png(["grim", "-o", o, "-t", "png", "-"]), True) if o else (_run_png(["grim", "-t", "png", "-"]), False)
+
 SHOT_METHODS = [
-    # Name, nötiges Programm, Aufruf, nur Wayland
-    ("grim", "grim", lambda: _run_png(["grim", "-t", "png", "-"]), True),
-    ("spectacle", "spectacle", lambda: _run_png(["spectacle", "-b", "-n", "-f", "-o", "{file}"], True), True),
-    ("gnome-screenshot", "gnome-screenshot", lambda: _run_png(["gnome-screenshot", "-f", "{file}"], True), True),
-    ("flameshot", "flameshot", lambda: _run_png(["flameshot", "full", "-r"]), False),
-    ("x11", None, _pil_grab, False),
-    ("maim", "maim", lambda: _run_png(["maim"]), False),
-    ("scrot", "scrot", lambda: _run_png(["scrot", "-o", "{file}"], True), False),
-    ("import", "import", lambda: _run_png(["import", "-window", "root", "png:-"]), False),
+    # Name, nötiges Programm, Aufruf (Bild, schon nur ein Bildschirm?), nur Wayland
+    ("grim", "grim", _grim, True),
+    ("spectacle", "spectacle", lambda: (_run_png(["spectacle", "-b", "-n", "-m", "-o", "{file}"], True), True), True),
+    ("gnome-screenshot", "gnome-screenshot", lambda: (_run_png(["gnome-screenshot", "-f", "{file}"], True), False), True),
+    ("flameshot", "flameshot", lambda: (_run_png(["flameshot", "screen", "-r"]), True), False),
+    ("x11", None, lambda: (_pil_grab(), False), False),
+    ("maim", "maim", lambda: (_run_png(["maim"]), False), False),
+    ("scrot", "scrot", lambda: (_run_png(["scrot", "-o", "{file}"], True), False), False),
+    ("import", "import", lambda: (_run_png(["import", "-window", "root", "png:-"]), False), False),
 ]
 _shot_ok = None
-def screenshot(pref="auto"):
-    """Ganzen Bildschirm aufnehmen. Unter Wayland über die Werkzeuge des Desktops, unter X11 direkt."""
+def screenshot(pref="auto", screen="auto"):
+    """Nur den Bildschirm mit dem Spiel aufnehmen. Unter Wayland über die Werkzeuge des Desktops, unter X11 direkt."""
     global _shot_ok
     wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
     order = [m for m in SHOT_METHODS if (m[0] == pref if pref != "auto" else True)]
@@ -182,11 +278,14 @@ def screenshot(pref="auto"):
         if need and not shutil.which(need): continue
         if name == "x11" and not os.environ.get("DISPLAY"): continue
         try:
-            im = fn().convert("RGB")
+            im, single = fn(); im = im.convert("RGB")
+            if not single or screen not in ("auto", "all"):
+                mon, mons = pick_monitor(screen)
+                if mon: im = crop_to(im, mon, mons); name = f"{name}, {mon[0]}"
             if im.width < 200 or im.height < 200: continue
             # komplett schwarz heisst meist: Wayland verweigert die Aufnahme
             if max(im.resize((32, 18)).convert("L").tobytes()) < 8: continue
-            _shot_ok = name
+            _shot_ok = name.split(",")[0]
             return im, name
         except Exception as e: last = e
     raise RuntimeError(T("no_shot") + (f" ({last})" if last else ""))
@@ -458,7 +557,7 @@ class Scanner:
             if not self.start(): return
         self.busy = True
         try:
-            try: im, how = screenshot(self.c.get("shot", "auto"))
+            try: im, how = screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))
             except Exception as e:
                 self.ui.log(str(e))
                 if not auto: self.ui.state(T("no_shot"), "bad"); play("err") if self.c["sounds"] else None
@@ -476,7 +575,7 @@ class Scanner:
             shots = [im]
             for _ in range(1 if auto else 2):
                 time.sleep(.35)
-                try: shots.append(screenshot(self.c.get("shot", "auto"))[0])
+                try: shots.append(screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))[0])
                 except Exception: break
             try: ocr = run_ocr(shots)
             except Exception as e:
@@ -587,6 +686,16 @@ class App:
         sh = ttk.Frame(f); sh.pack(fill="x")
         ttk.Combobox(sh, values=opts, textvariable=self.shot, state="readonly", width=18).pack(side="left")
         ttk.Button(sh, text=T("testshot"), command=self.test_shot).pack(side="left", padx=8)
+        mons = monitors()
+        if len(mons) > 1:
+            row(T("screen"))
+            self.scr_names = {T("scr_auto"): "auto", T("scr_all"): "all"}
+            for m in mons: self.scr_names[f"{m[0]}  ({m[3]} × {m[4]})"] = m[0]
+            cur = next((k for k, v in self.scr_names.items() if v == conf.get("screen", "auto")), T("scr_auto"))
+            self.screen = tk.StringVar(value=cur)
+            cb = ttk.Combobox(f, values=list(self.scr_names), textvariable=self.screen, state="readonly", width=36); cb.pack(anchor="w")
+            cb.bind("<<ComboboxSelected>>", lambda e: self.apply())
+        else: self.screen = None
 
         chk = ttk.Frame(f); chk.pack(fill="x", pady=(10, 0))
         self.sounds = tk.BooleanVar(value=conf["sounds"]); self.notif = tk.BooleanVar(value=conf["notify"]); self.autost = tk.BooleanVar(value=conf["autostart"])
@@ -648,6 +757,7 @@ class App:
         except Exception: pass
         self.c["sounds"] = self.sounds.get(); self.c["notify"] = self.notif.get(); self.c["autostart"] = self.autost.get()
         self.c["shot"] = self.shot.get() or "auto"; self.c["lang"] = LANG
+        if self.screen is not None: self.c["screen"] = self.scr_names.get(self.screen.get(), "auto")
 
     def save(self):
         try: save_conf(self.c)
@@ -668,7 +778,7 @@ class App:
         self.read()
         def go():
             try:
-                im, how = screenshot(self.c["shot"]); self.log(T("shot_ok", m=how, w=im.width, h=im.height))
+                im, how = screenshot(self.c["shot"], self.c.get("screen", "auto")); self.log(T("shot_ok", m=how, w=im.width, h=im.height))
             except Exception as e: self.log(str(e))
         threading.Thread(target=go, daemon=True).start()
 
