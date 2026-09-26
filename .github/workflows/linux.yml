@@ -1,0 +1,43 @@
+name: Linux Paket
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dateien suchen und prüfen
+        # egal ob im Ordner linux oder beim Hochladen im Web direkt im Hauptordner gelandet
+        run: |
+          mkdir -p out/cargodeck-scanner-linux
+          for f in cargodeck-scanner.py install.sh uninstall.sh cargodeck-scanner.png README-linux.md; do
+            p=$(find . -name "$f" -not -path "./out/*" -not -path "./.git/*" | head -1)
+            [ -n "$p" ] || { echo "Fehlt: $f"; exit 1; }
+            cp "$p" out/cargodeck-scanner-linux/
+          done
+          cp LICENSE out/cargodeck-scanner-linux/ 2>/dev/null || true
+          python3 -m py_compile out/cargodeck-scanner-linux/cargodeck-scanner.py
+          bash -n out/cargodeck-scanner-linux/install.sh
+      - name: Paket bauen
+        run: |
+          rm -rf out/cargodeck-scanner-linux/__pycache__
+          chmod +x out/cargodeck-scanner-linux/*.sh out/cargodeck-scanner-linux/cargodeck-scanner.py
+          tar -C out -czf out/CargoDeckScanner-linux.tar.gz cargodeck-scanner-linux
+          (cd out && sha256sum CargoDeckScanner-linux.tar.gz > SHA256-linux.txt)
+      - name: Als Download speichern
+        uses: actions/upload-artifact@v4
+        with:
+          name: CargoDeckScanner-linux
+          path: out/CargoDeckScanner-linux.tar.gz
+      - name: An das Release hängen
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ github.event.release.tag_name }} out/CargoDeckScanner-linux.tar.gz out/SHA256-linux.txt --clobber
