@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# Cargo Deck Scanner für Linux
+# Cargo Deck Price Capture für Linux
 # Liest das Star Citizen Handelsterminal per Texterkennung (Tesseract) und schickt die Preise an Cargo Deck.
 # Alles läuft lokal, an die Seite gehen nur der erkannte Text und ein verkleinertes Bild.
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.5.1"
+VERSION = "1.5.2"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -19,14 +19,14 @@ SOCK = os.path.join(RUN_DIR, APP + "-" + str(os.getuid()) + ".sock")
 
 # ---------------------------------------------------------------- Sprache
 TEXT = {
-    "title": ("Cargo Deck Scanner", "Cargo Deck Scanner"),
-    "subtitle": ("Scanner für Handelsterminals", "Trade terminal scanner"),
-    "nav_scan": ("Scanner", "Scanner"), "nav_set": ("Einstellungen", "Settings"), "nav_help": ("Anleitung", "Guide"),
+    "title": ("Cargo Deck Price Capture", "Cargo Deck Price Capture"),
+    "subtitle": ("Liest Preise vom Handelsterminal", "Reads prices from the trade terminal"),
+    "nav_scan": ("Erfassen", "Capture"), "nav_set": ("Einstellungen", "Settings"), "nav_help": ("Anleitung", "Guide"),
     "scan_now": ("Jetzt scannen", "Scan now"), "auto": ("Automatik", "Auto mode"), "auto_short": ("Auto", "Auto"), "every": ("alle", "every"),
     "last_title": ("Letzter Scan", "Last scan"), "last_none": ("Noch nichts gescannt", "Nothing scanned yet"),
     "last_ok": ("{n} Preise um {t}", "{n} prices at {t}"), "last_look": ("Schau auf die Website, dort prüfen und übernehmen.", "Check the website, review and apply them there."),
     "conn_title": ("Verbindung", "Connection"), "code_lbl": ("Kopplungscode", "Pairing code"),
-    "code_hint": ("Steht auf der Website unter Einstellungen, PC Scanner.", "Shown on the website under Settings, PC scanner."),
+    "code_hint": ("Steht auf der Website unter Einstellungen, Price Capture.", "Shown on the website under Settings, Price Capture."),
     "keys_title": ("Tasten", "Keys"),
     "keys_hint": ("Unter Wayland fragt das System beim Start nach den Tasten. Geht das nicht, in den Systemeinstellungen ein Tastenkürzel mit diesem Befehl anlegen.", "On Wayland the system asks for the keys when starting. If that does not work, create a shortcut in the system settings with this command."),
     "opt_title": ("Optionen", "Options"), "engine_title": ("Texterkennung", "Text recognition"), "engine_load": ("wird geladen…", "loading…"),
@@ -34,18 +34,18 @@ TEXT = {
     "engine_tess_s": ("Tesseract, bitte install.sh nochmal ausführen für die neue Erkennung", "Tesseract, please run install.sh again for the new recognition"),
     "sub_hot": ("{k} am Terminal im Spiel drücken", "Press {k} at the terminal in game"),
     "sub_auto": ("Alle {n} Sekunden, nur wenn ein Terminal zu sehen ist", "Every {n} seconds, only when a terminal is visible"),
-    "sub_stopped": ("Drück auf Start, dann wartet der Scanner auf deine Taste.", "Press Start, then the scanner waits for your key."),
+    "sub_stopped": ("Drück auf Start, dann wartet Price Capture auf deine Taste.", "Press Start, then Price Capture waits for your key."),
     "help_title": ("So funktioniert es", "How it works"),
-    "h1_t": ("Code holen", "Get the code"), "h1": ("Öffne Cargo Deck im Browser, geh auf Einstellungen und kopiere den Code unter PC Scanner.", "Open Cargo Deck in your browser, go to Settings and copy the code under PC scanner."),
+    "h1_t": ("Code holen", "Get the code"), "h1": ("Öffne Cargo Deck im Browser, geh auf Einstellungen und kopiere den Code unter Price Capture.", "Open Cargo Deck in your browser, go to Settings and copy the code under Price Capture."),
     "h2_t": ("Code eintragen", "Enter the code"), "h2": ("Unter Einstellungen den Code einfügen. Die Adresse der Website stimmt schon.", "Paste the code under Settings. The website address is already correct."),
     "h3_t": ("Starten", "Start"), "h3": ("Auf Start drücken. Der Punkt wird grün. Unter Wayland kommt einmal ein Fenster vom System für die Tasten, dort bestätigen.", "Press Start. The dot turns green. On Wayland the system shows a window for the keys once, confirm it there."),
     "h4_t": ("Im Spiel scannen", "Scan in game"), "h4": ("Am Handelsterminal {k} drücken. Oder Automatik einschalten, dann liest er von selbst, sobald ein Terminal zu sehen ist.", "At the trade terminal press {k}. Or turn on auto mode, then it reads by itself whenever a terminal is visible."),
     "h5_t": ("Auf der Website übernehmen", "Apply on the website"), "h5": ("Der Scan erscheint auf der Website. Kurz prüfen und übernehmen, dann fließen die Preise in deine Routen.", "The scan shows up on the website. Check it quickly and apply it, then the prices flow into your routes."),
     "tips_title": ("Tipps", "Tips"),
     "tip1": ("Setz auf der Website deinen Standort, bei der Station auf „Ich bin hier“. Dann ist die Station sofort klar und alles geht schneller.", "Set your location on the website, click “I'm here” on the station. Then the station is clear right away and everything is faster."),
-    "tip2": ("Das Terminal sollte groß und gut lesbar im Bild sein. Mit Screenshot testen siehst du, was der Scanner sieht.", "The terminal should be large and readable on screen. Test screenshot shows what the scanner sees."),
+    "tip2": ("Das Terminal sollte groß und gut lesbar im Bild sein. Mit Screenshot testen siehst du, was Price Capture sieht.", "The terminal should be large and readable on screen. Test screenshot shows what Price Capture sees."),
     "tip3": ("Mit der Nadel oben rechts bleibt ein kleines Fenster immer im Vordergrund, wie beim Windows Rechner.", "The pin at the top right keeps a small window always on top, like the Windows calculator."),
-    "tip4": ("Mehrere Bildschirme gehen automatisch, der Scanner nimmt den mit dem Spiel.", "Multiple screens work automatically, the scanner takes the one with the game."),
+    "tip4": ("Mehrere Bildschirme gehen automatisch, Price Capture nimmt den mit dem Spiel.", "Multiple screens work automatically, Price Capture takes the one with the game."),
     "open_site": ("Website öffnen", "Open website"),
 
     "site": ("Website", "Website"),
@@ -108,7 +108,7 @@ TEXT = {
     "log": ("Verlauf", "Log"),
     "keys_swapped": ("Deine Tastatur hat diese Taste nicht, darum jetzt {k} zum Scannen und {a} für die Automatik", "Your keyboard doesn't have that key, so now {k} scans and {a} toggles auto"),
     "lang": ("Sprache", "Language"),
-    "already": ("Der Scanner läuft schon.", "The scanner is already running."),
+    "already": ("Price Capture läuft schon.", "Price Capture is already running."),
     "started": ("Gestartet", "Started"),
 }
 LANG = "de"
@@ -141,7 +141,7 @@ def set_autostart(on):
         if on:
             os.makedirs(d, exist_ok=True)
             with open(f, "w") as fh:
-                fh.write(f"[Desktop Entry]\nType=Application\nName=Cargo Deck Scanner\nExec={sys.executable} {os.path.abspath(__file__)} --minimized\nIcon={APP}\nX-GNOME-Autostart-enabled=true\n")
+                fh.write(f"[Desktop Entry]\nType=Application\nName=Cargo Deck Price Capture\nExec={sys.executable} {os.path.abspath(__file__)} --minimized\nIcon={APP}\nX-GNOME-Autostart-enabled=true\n")
         elif os.path.exists(f): os.remove(f)
     except Exception: pass
 
@@ -178,7 +178,7 @@ def play(kind):
 
 def notify(text):
     if shutil.which("notify-send"):
-        try: subprocess.Popen(["notify-send", "-a", "Cargo Deck Scanner", "-t", "3500", "Cargo Deck", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try: subprocess.Popen(["notify-send", "-a", "Cargo Deck Price Capture", "-t", "3500", "Cargo Deck", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception: pass
 
 # ---------------------------------------------------------------- Screenshot
@@ -202,7 +202,7 @@ def _pil_grab():
 
 # ---------------------------------------------------------------- Nur der Bildschirm mit dem Spiel
 _last_mon = None   # zuletzt erkannter Bildschirm des Spiels
-_SELF_TITLE = "Cargo Deck Scanner"
+_SELF_TITLE = "Cargo Deck Price Capture"
 
 def monitors():
     """Alle Bildschirme als (Name, x, y, Breite, Höhe) in X11 Koordinaten, auch unter XWayland."""
@@ -1623,7 +1623,7 @@ def main():
     if "--version" in args: print(VERSION); return
     for cmd in ("scan", "toggle", "show"):
         if f"--{cmd}" in args:
-            if not send_command(cmd): print("Cargo Deck Scanner läuft nicht / is not running"); sys.exit(1)
+            if not send_command(cmd): print("Cargo Deck Price Capture läuft nicht / is not running"); sys.exit(1)
             return
     if args[:1] == ["--ocr-test"] and len(args) >= 3:
         from PIL import Image

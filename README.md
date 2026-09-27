@@ -1,4 +1,4 @@
-# Cargo Deck Scanner
+# Cargo Deck Price Capture
 
 App für Windows und Linux für [Cargo Deck](https://cargodeck.onrender.com). Sie liest Preise und Bestand vom Handelsterminal in Star Citizen und schickt sie an deine Cargo Deck Seite.
 
@@ -6,15 +6,15 @@ App für Windows und Linux für [Cargo Deck](https://cargodeck.onrender.com). Si
 
 Rechts unter **Releases** die neueste Version öffnen.
 
-**Windows** `CargoDeckScanner.exe` laden. Keine Installation nötig, einfach starten.
+**Windows** `CargoDeckPriceCapture.exe` laden. Keine Installation nötig, einfach starten.
 
-**Linux** `CargoDeckScanner-linux.tar.gz` laden, entpacken und `./install.sh` ausführen. Mehr dazu in `linux/README-linux.md`.
+**Linux** `CargoDeckPriceCapture-linux.tar.gz` laden, entpacken und `./install.sh` ausführen. Mehr dazu in `linux/README-linux.md`.
 
 Windows zeigt beim ersten Start eventuell "Der Computer wurde durch Windows geschützt", weil die App nicht signiert ist. Dann auf **Weitere Informationen** und **Trotzdem ausführen**.
 
 ## So gehts
 
-1. Auf Cargo Deck unter **Einstellungen, PC Scanner** den Kopplungscode kopieren
+1. Auf Cargo Deck unter **Einstellungen, Price Capture** den Kopplungscode kopieren
 2. In der App einfügen und **Starten** drücken
 3. Im Spiel am Terminal **Linke Strg + ö** drücken, oder die Automatik einschalten
 

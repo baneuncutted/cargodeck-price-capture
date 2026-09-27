@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Store Paket für den Cargo Deck Scanner. Die Version füllt der GitHub Workflow ein. -->
+<!-- Store Paket für Cargo Deck Price Capture. Die Version füllt der GitHub Workflow ein.
+     DisplayName bleibt vorerst Cargo Deck Scanner, weil dieser Name im Partner Center reserviert ist. Erst den neuen Namen dort reservieren, dann hier ändern. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -28,17 +29,17 @@
   </Resources>
 
   <Applications>
-    <Application Id="CargoDeckScanner" Executable="CargoDeckScanner.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Cargo Deck Scanner" Description="Scanner für Star Citizen Handelsterminals"
+    <Application Id="CargoDeckScanner" Executable="CargoDeckPriceCapture.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Cargo Deck Scanner" Description="Liest Preise vom Star Citizen Handelsterminal"
         BackgroundColor="#0c1119" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Cargo Deck" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0c1119" />
       </uap:VisualElements>
       <Extensions>
-        <desktop:Extension Category="windows.startupTask" Executable="CargoDeckScanner.exe" EntryPoint="Windows.FullTrustApplication">
+        <desktop:Extension Category="windows.startupTask" Executable="CargoDeckPriceCapture.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="CargoDeckScannerStartup" Enabled="false" DisplayName="Cargo Deck Scanner" />
         </desktop:Extension>
-        <uap3:Extension Category="windows.appExecutionAlias" Executable="CargoDeckScanner.exe" EntryPoint="Windows.FullTrustApplication">
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="CargoDeckPriceCapture.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>
             <desktop:ExecutionAlias Alias="cargodeckscanner.exe" />
           </uap3:AppExecutionAlias>

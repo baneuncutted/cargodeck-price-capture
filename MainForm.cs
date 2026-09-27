@@ -63,7 +63,7 @@ class MainForm : Form
         Lang.En = cfg.Lang == "en";
         AutoScaleMode = AutoScaleMode.None;
         k = DeviceDpi / 96f;
-        Text = "Cargo Deck Scanner";
+        Text = "Cargo Deck Price Capture";
         BackColor = cBg; ForeColor = cText;
         Font = new Font("Segoe UI", 9.75f);
         FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
@@ -435,7 +435,7 @@ class MainForm : Form
         menu.Items.Add(miAuto);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(T("tray_quit"), null, (s, e) => Close());
-        if (tray == null) { tray = new NotifyIcon { Icon = Icon, Text = "Cargo Deck Scanner", Visible = true }; tray.DoubleClick += (s, e) => ShowWindow(); }
+        if (tray == null) { tray = new NotifyIcon { Icon = Icon, Text = "Cargo Deck Price Capture", Visible = true }; tray.DoubleClick += (s, e) => ShowWindow(); }
         var old = tray.ContextMenuStrip; tray.ContextMenuStrip = menu; old?.Dispose();
     }
 
@@ -520,8 +520,8 @@ class MainForm : Form
     void StartScanner()
     {
         ReadForm();
-        if (!Regex.IsMatch(cfg.Url, "^https?://[^/]+")) { ShowPage(1); MessageBox.Show(this, T("bad_url"), "Cargo Deck Scanner"); return; }
-        if (!CodeRe.IsMatch(cfg.Code)) { ShowPage(1); MessageBox.Show(this, T("bad_code"), "Cargo Deck Scanner"); tCode.Focus(); return; }
+        if (!Regex.IsMatch(cfg.Url, "^https?://[^/]+")) { ShowPage(1); MessageBox.Show(this, T("bad_url"), "Cargo Deck Price Capture"); return; }
+        if (!CodeRe.IsMatch(cfg.Code)) { ShowPage(1); MessageBox.Show(this, T("bad_code"), "Cargo Deck Price Capture"); tCode.Focus(); return; }
         running = true; lastPrint = ""; nextAuto = DateTime.Now; lastPing = DateTime.MinValue;
         bStart.Text = T("stop"); bStart.Icon = "  "; bStart.Primary = false; bStart.Invalidate();
         foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }

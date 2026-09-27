@@ -8,12 +8,12 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <AssemblyName>CargoDeckScanner</AssemblyName>
+    <AssemblyName>CargoDeckPriceCapture</AssemblyName>
     <RootNamespace>CargoDeckScanner</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.5.1</Version>
-    <Product>Cargo Deck Scanner</Product>
+    <Version>1.5.2</Version>
+    <Product>Cargo Deck Price Capture</Product>
     <Company>Cargo Deck</Company>
     <Description>Liest Star Citizen Handelsterminals und schickt die Preise an Cargo Deck</Description>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

@@ -1,12 +1,12 @@
-# Cargo Deck Scanner für Linux
+# Cargo Deck Price Capture für Linux
 
 Liest das Handelsterminal in Star Citizen und schickt Preise und Bestand an [Cargo Deck](https://cargodeck.onrender.com). Die Texterkennung läuft lokal mit PaddleOCR, der gleichen Technik wie auf der Website. Fehlt die, liest Tesseract. An die Seite gehen nur der erkannte Text und ein verkleinertes Bild.
 
 ## Installieren
 
 ```
-tar xzf CargoDeckScanner-linux.tar.gz
-cd cargodeck-scanner-linux
+tar xzf CargoDeckPriceCapture-linux.tar.gz
+cd cargodeck-price-capture-linux
 ./install.sh
 ```
 
@@ -32,7 +32,7 @@ Screenshots gehen unter X11 direkt, unter Wayland über grim (Sway, Hyprland), s
 
 ---
 
-# Cargo Deck Scanner for Linux
+# Cargo Deck Price Capture for Linux
 
 Reads the Star Citizen trade terminal and sends prices and stock to Cargo Deck. Text recognition runs locally with Tesseract.
 

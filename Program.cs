@@ -35,7 +35,7 @@ static class Program
         }
         if (!first && !args.Contains("--ui-shot"))
         {
-            MessageBox.Show(Lang.T("already"), "Cargo Deck Scanner");
+            MessageBox.Show(Lang.T("already"), "Cargo Deck Price Capture");
             return 0;
         }
         ApplicationConfiguration.Initialize();
@@ -70,6 +70,6 @@ static class Program
             File.AppendAllText(Path.Combine(dir, "scanner-fehler.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {ex}\r\n\r\n");
         }
         catch { }
-        if (show) try { MessageBox.Show(Lang.T("crash") + "\n\n" + ex?.Message + "\n\n" + Lang.T("crash_log"), "Cargo Deck Scanner"); } catch { }
+        if (show) try { MessageBox.Show(Lang.T("crash") + "\n\n" + ex?.Message + "\n\n" + Lang.T("crash_log"), "Cargo Deck Price Capture"); } catch { }
     }
 }

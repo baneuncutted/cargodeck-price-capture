@@ -46,11 +46,11 @@ jobs:
         run: |
           $mk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter makeappx.exe | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
           if (-not $mk) { Write-Error "makeappx nicht gefunden"; exit 1 }
-          & $mk.FullName pack /d pkg /p "CargoDeckScanner_${{ inputs.version }}_x64.msix" /o
+          & $mk.FullName pack /d pkg /p "CargoDeckPriceCapture_${{ inputs.version }}_x64.msix" /o
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Zum Herunterladen bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: CargoDeckScanner-Store-${{ inputs.version }}
+          name: CargoDeckPriceCapture-Store-${{ inputs.version }}
           path: "*.msix"

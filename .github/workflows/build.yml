@@ -20,14 +20,14 @@ jobs:
         run: dotnet publish CargoDeckScanner.csproj -c Release -o out
       - name: Prüfsumme
         shell: pwsh
-        run: (Get-FileHash out/CargoDeckScanner.exe -Algorithm SHA256).Hash | Out-File out/SHA256.txt -Encoding ascii
+        run: (Get-FileHash out/CargoDeckPriceCapture.exe -Algorithm SHA256).Hash | Out-File out/SHA256.txt -Encoding ascii
       - name: Als Download speichern
         uses: actions/upload-artifact@v4
         with:
-          name: CargoDeckScanner
+          name: CargoDeckPriceCapture
           path: out/*
       - name: An das Release hängen
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ github.event.release.tag_name }} out/CargoDeckScanner.exe out/SHA256.txt --clobber
+        run: gh release upload ${{ github.event.release.tag_name }} out/CargoDeckPriceCapture.exe out/SHA256.txt --clobber

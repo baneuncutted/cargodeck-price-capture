@@ -13,15 +13,15 @@ static class Lang
 
     static readonly Dictionary<string, (string de, string en)> Texts = new()
     {
-        ["subtitle"] = ("Scanner für Handelsterminals", "Trade terminal scanner"),
-        ["nav_scan"] = ("Scanner", "Scanner"),
+        ["subtitle"] = ("Liest Preise vom Handelsterminal", "Reads prices from the trade terminal"),
+        ["nav_scan"] = ("Erfassen", "Capture"),
         ["nav_set"] = ("Einstellungen", "Settings"),
         ["nav_help"] = ("Anleitung", "Guide"),
         ["pin"] = ("Im Vordergrund halten, kleines Fenster", "Keep on top, small window"),
         ["unpin"] = ("Zurück zum großen Fenster", "Back to the full window"),
 
         ["stopped"] = ("Gestoppt", "Stopped"),
-        ["stopped_sub"] = ("Drück auf Starten, dann wartet der Scanner auf deine Taste.", "Press Start, then the scanner waits for your key."),
+        ["stopped_sub"] = ("Drück auf Starten, dann wartet Price Capture auf deine Taste.", "Press Start, then Price Capture waits for your key."),
         ["run_hot"] = ("Läuft", "Running"),
         ["run_hot_sub"] = ("Linke Strg + {0} am Terminal im Spiel drücken", "Press Left Ctrl + {0} at the terminal in game"),
         ["run_auto"] = ("Läuft automatisch", "Running automatically"),
@@ -44,7 +44,7 @@ static class Lang
         ["conn_title"] = ("Verbindung", "Connection"),
         ["url"] = ("Adresse der Website", "Website address"),
         ["code"] = ("Kopplungscode", "Pairing code"),
-        ["code_hint"] = ("Steht auf der Website unter Einstellungen, PC Scanner.", "Shown on the website under Settings, PC scanner."),
+        ["code_hint"] = ("Steht auf der Website unter Einstellungen, Price Capture.", "Shown on the website under Settings, Price Capture."),
         ["keys_title"] = ("Tasten", "Keys"),
         ["keys_hint"] = ("Feld anklicken und neue Taste drücken", "Click a field and press the new key"),
         ["key_scan"] = ("Scannen", "Scan"),
@@ -64,11 +64,11 @@ static class Lang
 
         ["help_title"] = ("So funktioniert es", "How it works"),
         ["h1_t"] = ("Code holen", "Get the code"),
-        ["h1"] = ("Öffne Cargo Deck im Browser, geh auf Einstellungen und kopiere den Code unter PC Scanner.", "Open Cargo Deck in your browser, go to Settings and copy the code under PC scanner."),
+        ["h1"] = ("Öffne Cargo Deck im Browser, geh auf Einstellungen und kopiere den Code unter Price Capture.", "Open Cargo Deck in your browser, go to Settings and copy the code under Price Capture."),
         ["h2_t"] = ("Code eintragen", "Enter the code"),
         ["h2"] = ("Hier unter Einstellungen den Code einfügen. Die Adresse der Website stimmt schon.", "Paste the code here under Settings. The website address is already correct."),
         ["h3_t"] = ("Starten", "Start"),
-        ["h3"] = ("Auf Starten drücken. Der Punkt oben wird grün, der Scanner wartet dann im Hintergrund.", "Press Start. The dot turns green and the scanner waits in the background."),
+        ["h3"] = ("Auf Starten drücken. Der Punkt oben wird grün, Price Capture wartet dann im Hintergrund.", "Press Start. The dot turns green and Price Capture waits in the background."),
         ["h4_t"] = ("Im Spiel scannen", "Scan in game"),
         ["h4"] = ("Am Handelsterminal Linke Strg + {0} drücken. Oder Automatik einschalten, dann liest er von selbst, sobald ein Terminal zu sehen ist.", "At the trade terminal press Left Ctrl + {0}. Or turn on auto mode, then it reads by itself whenever a terminal is visible."),
         ["h5_t"] = ("Auf der Website übernehmen", "Apply on the website"),
@@ -77,7 +77,7 @@ static class Lang
         ["tip1"] = ("Setz auf der Website deinen Standort, bei der Station auf „Ich bin hier“. Dann ist die Station sofort klar und alles geht schneller.", "Set your location on the website, click “I'm here” on the station. Then the station is clear right away and everything is faster."),
         ["tip2"] = ("Das Terminal sollte groß und gut lesbar im Bild sein. Fenster oder randloser Vollbildmodus gehen beide.", "The terminal should be large and readable on screen. Windowed and borderless fullscreen both work."),
         ["tip3"] = ("Mit der Nadel oben rechts bleibt ein kleines Fenster immer im Vordergrund, wie beim Windows Rechner.", "The pin at the top right keeps a small window always on top, like the Windows calculator."),
-        ["tip4"] = ("Nach dem Starten kannst du das Fenster schließen oder minimieren. Der Scanner läuft unten rechts neben der Uhr weiter.", "After starting you can close or minimize the window. The scanner keeps running at the bottom right next to the clock."),
+        ["tip4"] = ("Nach dem Starten kannst du das Fenster schließen oder minimieren. Price Capture läuft unten rechts neben der Uhr weiter.", "After starting you can close or minimize the window. Price Capture keeps running at the bottom right next to the clock."),
         ["open_site"] = ("Website öffnen", "Open website"),
 
         ["ready"] = ("Bereit", "Ready"),
@@ -101,11 +101,11 @@ static class Lang
         ["http_err"] = ("Website antwortet mit Fehler {0}", "Website answers with error {0}"),
         ["err"] = ("Fehler {0}", "Error {0}"),
         ["bad_url"] = ("Bitte die Adresse der Cargo Deck Website eintragen, zum Beispiel https://cargodeck.onrender.com", "Please enter the address of the Cargo Deck website, for example https://cargodeck.onrender.com"),
-        ["bad_code"] = ("Der Kopplungscode hat 12 Zeichen. Du findest ihn auf der Website unter Einstellungen, PC Scanner.", "The pairing code has 12 characters. You find it on the website under Settings, PC scanner."),
+        ["bad_code"] = ("Der Kopplungscode hat 12 Zeichen. Du findest ihn auf der Website unter Einstellungen, Price Capture.", "The pairing code has 12 characters. You find it on the website under Settings, Price Capture."),
         ["tray_open"] = ("Öffnen", "Open"),
         ["tray_quit"] = ("Beenden", "Quit"),
-        ["already"] = ("Der Cargo Deck Scanner läuft schon. Du findest ihn unten rechts bei den Symbolen neben der Uhr.", "Cargo Deck Scanner is already running. You find it at the bottom right next to the clock."),
-        ["crash"] = ("Da ist etwas schiefgelaufen, der Scanner läuft aber weiter.", "Something went wrong, but the scanner keeps running."),
+        ["already"] = ("Cargo Deck Price Capture läuft schon. Du findest es unten rechts bei den Symbolen neben der Uhr.", "Cargo Deck Price Capture is already running. You find it at the bottom right next to the clock."),
+        ["crash"] = ("Da ist etwas schiefgelaufen, Price Capture läuft aber weiter.", "Something went wrong, but Price Capture keeps running."),
         ["crash_log"] = ("Details stehen in %APPDATA%\\CargoDeck\\scanner-fehler.log", "Details are in %APPDATA%\\CargoDeck\\scanner-fehler.log"),
     };
 }

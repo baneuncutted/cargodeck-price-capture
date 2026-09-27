@@ -1,0 +1,24 @@
+Titel
+Cargo Deck Price Capture 1.5.2
+
+Tag
+V1.5.2
+
+Beschreibung
+Der Cargo Deck Scanner heißt jetzt **Cargo Deck Price Capture**. Das Programm kann dasselbe wie vorher, nur der Name ist neu.
+
+**Welche Datei?**
+- `CargoDeckPriceCapture.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckPriceCapture-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+Deine Einstellungen und der Kopplungscode bleiben erhalten. Unter Windows kannst du die alte `CargoDeckScanner.exe` löschen.
+
+---
+
+Cargo Deck Scanner is now called **Cargo Deck Price Capture**. It does the same as before, only the name is new.
+
+**Which file?**
+- `CargoDeckPriceCapture.exe` is for **Windows** 10 and 11. Just download and run, no installation.
+- `CargoDeckPriceCapture-linux.tar.gz` is for **Linux**. Extract it and run `./install.sh`.
+
+Your settings and pairing code stay. On Windows you can delete the old `CargoDeckScanner.exe`.

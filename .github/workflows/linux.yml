@@ -16,35 +16,35 @@ jobs:
       - name: Dateien suchen und prüfen
         # egal ob im Ordner linux oder beim Hochladen im Web direkt im Hauptordner gelandet
         run: |
-          mkdir -p out/cargodeck-scanner-linux
+          mkdir -p out/cargodeck-price-capture-linux
           for f in cargodeck-scanner.py install.sh uninstall.sh cargodeck-scanner.png cargodeck-scanner-36.png README-linux.md; do
             p=$(find . -name "$f" -not -path "./out/*" -not -path "./.git/*" | head -1)
             [ -n "$p" ] || { echo "Fehlt: $f"; exit 1; }
-            cp "$p" out/cargodeck-scanner-linux/
+            cp "$p" out/cargodeck-price-capture-linux/
           done
           # Modelle der Texterkennung (PaddleOCR)
-          mkdir -p out/cargodeck-scanner-linux/ocr
+          mkdir -p out/cargodeck-price-capture-linux/ocr
           for f in det.onnx rec.onnx dict.txt LICENSES.txt; do
             p=$(find . -name "$f" -not -path "./out/*" -not -path "./.git/*" | head -1)
             [ -n "$p" ] || { echo "Fehlt: $f"; exit 1; }
-            cp "$p" out/cargodeck-scanner-linux/ocr/
+            cp "$p" out/cargodeck-price-capture-linux/ocr/
           done
-          cp LICENSE out/cargodeck-scanner-linux/ 2>/dev/null || true
-          python3 -m py_compile out/cargodeck-scanner-linux/cargodeck-scanner.py
-          bash -n out/cargodeck-scanner-linux/install.sh
+          cp LICENSE out/cargodeck-price-capture-linux/ 2>/dev/null || true
+          python3 -m py_compile out/cargodeck-price-capture-linux/cargodeck-scanner.py
+          bash -n out/cargodeck-price-capture-linux/install.sh
       - name: Paket bauen
         run: |
-          rm -rf out/cargodeck-scanner-linux/__pycache__
-          chmod +x out/cargodeck-scanner-linux/*.sh out/cargodeck-scanner-linux/cargodeck-scanner.py
-          tar -C out -czf out/CargoDeckScanner-linux.tar.gz cargodeck-scanner-linux
-          (cd out && sha256sum CargoDeckScanner-linux.tar.gz > SHA256-linux.txt)
+          rm -rf out/cargodeck-price-capture-linux/__pycache__
+          chmod +x out/cargodeck-price-capture-linux/*.sh out/cargodeck-price-capture-linux/cargodeck-scanner.py
+          tar -C out -czf out/CargoDeckPriceCapture-linux.tar.gz cargodeck-price-capture-linux
+          (cd out && sha256sum CargoDeckPriceCapture-linux.tar.gz > SHA256-linux.txt)
       - name: Als Download speichern
         uses: actions/upload-artifact@v4
         with:
-          name: CargoDeckScanner-linux
-          path: out/CargoDeckScanner-linux.tar.gz
+          name: CargoDeckPriceCapture-linux
+          path: out/CargoDeckPriceCapture-linux.tar.gz
       - name: An das Release hängen
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ github.event.release.tag_name }} out/CargoDeckScanner-linux.tar.gz out/SHA256-linux.txt --clobber
+        run: gh release upload ${{ github.event.release.tag_name }} out/CargoDeckPriceCapture-linux.tar.gz out/SHA256-linux.txt --clobber

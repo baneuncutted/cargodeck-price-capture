@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cargo Deck Scanner für Linux installieren / install Cargo Deck Scanner for Linux
+# Cargo Deck Price Capture für Linux installieren / install Cargo Deck Price Capture for Linux
 # Installiert nur für deinen Benutzer, nach ~/.local. Pakete kommen aus deiner Distribution.
 set -e
 cd "$(dirname "$0")"
@@ -11,7 +11,7 @@ BIN="$HOME/.local/bin"
 say(){ printf '\033[1;36m%s\033[0m\n' "$*"; }
 warn(){ printf '\033[1;33m%s\033[0m\n' "$*"; }
 
-say "Cargo Deck Scanner, Installation"
+say "Cargo Deck Price Capture, Installation"
 
 # ---- Pakete: Python mit Tk, Pillow, Tesseract mit Englisch, Meldungen
 SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null && SUDO=sudo
@@ -42,7 +42,7 @@ pipu(){ python3 -m pip install --user "$@" 2>/dev/null || python3 -m pip install
 if ! python3 -c "import numpy, onnxruntime" 2>/dev/null; then
   say "Installiere die Texterkennung (numpy, onnxruntime), das kann einen Moment dauern"
   pipu numpy onnxruntime || pipu onnxruntime || \
-    warn "onnxruntime ging nicht zu installieren. Der Scanner liest dann mit Tesseract, das klappt schlechter."
+    warn "onnxruntime ging nicht zu installieren. Price Capture liest dann mit Tesseract, das klappt schlechter."
 fi
 
 # Tastenkürzel unter Wayland (KDE, GNOME 48+) laufen über das System Portal, dafür braucht es jeepney (reines Python)
@@ -92,7 +92,7 @@ rm -f "$HOME/.local/share/applications/$APP.desktop"
 cat > "$HOME/.local/share/applications/$APPID.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Cargo Deck Scanner
+Name=Cargo Deck Price Capture
 Comment=Star Citizen Handelsterminal lesen und an Cargo Deck senden
 Exec=$BIN/$APP
 Icon=$APP
@@ -102,7 +102,7 @@ StartupWMClass=Cargodeck-scanner
 EOF
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 
-say "Fertig. Starten über das Menü (Cargo Deck Scanner) oder mit: $APP"
+say "Fertig. Starten über das Menü (Cargo Deck Price Capture) oder mit: $APP"
 case ":$PATH:" in *":$BIN:"*) ;; *) warn "Hinweis: $BIN ist nicht im PATH, sonst mit $BIN/$APP starten" ;; esac
 if [ -n "$WAYLAND_DISPLAY" ]; then
   say "Wayland: Beim ersten Start fragt das System nach den Tastenkürzeln, dort bestätigen."
