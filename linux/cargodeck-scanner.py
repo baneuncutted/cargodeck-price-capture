@@ -5,7 +5,7 @@
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.5.2"
+VERSION = "1.6.0"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -83,6 +83,13 @@ TEXT = {
     "busy": ("Noch beschäftigt, einen Moment", "Still busy, one moment"),
     "sent_ok": ("{n} Preise erkannt {st}", "{n} prices recognized {st}"),
     "sent_look": ("{n} Preise erkannt {st}, schau auf die Seite", "{n} prices recognized {st}, check the website"),
+    "q_title": ("{n} Scans warten", "{n} scans waiting"),
+    "q_title1": ("1 Scan wartet", "1 scan waiting"),
+    "q_sub": ("Öffne Cargo Deck im Browser, dann werden sie automatisch hochgeladen.", "Open Cargo Deck in your browser, then they upload automatically."),
+    "q_log": ("Website nicht offen, Scan gespeichert ({n} warten)", "Website not open, scan stored ({n} waiting)"),
+    "q_code": ("{n} gespeicherte Scans für diesen Code", "{n} stored scans for this code"),
+    "q_notify": ("Scan gespeichert. Öffne Cargo Deck im Browser, dann wird er hochgeladen.", "Scan stored. Open Cargo Deck in your browser, then it gets uploaded."),
+    "q_sent": ("{n} gespeicherte Scans hochgeladen, prüf sie auf der Website", "{n} stored scans uploaded, check them on the website"),
     "last": ("Letzter Scan {t}, {n} Preise", "Last scan {t}, {n} prices"),
     "no_term": ("Kein Terminal erkannt", "No terminal recognized"),
     "send_fail": ("Senden fehlgeschlagen", "Sending failed"),
@@ -162,7 +169,7 @@ def make_wav(notes, vol=0.07, rate=44100):
     return out.getvalue()
 
 SOUNDS = {"on": [(660, 0, .09), (880, .07, .14)], "off": [(740, 0, .09), (554, .07, .14)],
-          "ok": [(784, 0, .08), (988, .06, .08), (1319, .12, .18)], "err": [(330, 0, .16)]}
+          "ok": [(784, 0, .08), (988, .06, .08), (1319, .12, .18)], "err": [(330, 0, .16)], "queued": [(698, 0, .12)]}
 _sound_files = {}
 def play(kind):
     player = next((p for p in ("pw-play", "paplay", "aplay") if shutil.which(p)), None)
@@ -946,6 +953,8 @@ class Scanner:
     def __init__(self, conf, ui):
         self.c, self.ui = conf, ui
         self.running = False; self.busy = False; self.last_print = None; self.next_auto = 0; self.next_ping = 0
+        # Scans, die warten, weil die Website nicht offen ist. Gehen raus, sobald sie offen ist.
+        self.pending = []; self.flushing = False; self.next_web = 0
         self.hot = Hotkeys(lambda: self.trigger("scan"), lambda: self.trigger("toggle"))
         self.portal = PortalHotkeys(lambda: self.trigger("scan"), lambda: self.trigger("toggle"), lambda m: self.ui.log(m))
         self._last_trig = {}; self.portal_keys = None
@@ -1003,13 +1012,17 @@ class Scanner:
         if self.c["sounds"]: play("off")
 
     def show_running(self):
+        if self.pending: self.ui.state(T("q_title1") if len(self.pending) == 1 else T("q_title", n=len(self.pending)), "warn"); return
         self.ui.state(T("running_auto", n=self.c["interval"]) if self.c["mode"] == "auto" else T("running_hot", k=pretty_key(self.c["scan_key"])), "good")
 
     def loop(self):
         while True:
             time.sleep(.25)
-            if not self.running: continue
             now = time.time()
+            if self.pending and not self.flushing and now >= self.next_web:
+                self.next_web = now + 4; self.flushing = True
+                threading.Thread(target=self.flush, daemon=True).start()
+            if not self.running: continue
             if now >= self.next_ping:
                 self.next_ping = now + 60
                 threading.Thread(target=self.ping, daemon=True).start()
@@ -1018,8 +1031,39 @@ class Scanner:
                 self.scan(True)
 
     def ping(self):
-        try: post(self.c["url"] + "/api/pair/ping", {"pair": self.c["code"]}, 10)
-        except Exception: pass
+        """Meldet sich beim Server und sagt, ob die Website mit diesem Code gerade offen ist."""
+        try:
+            status, raw = post(self.c["url"] + "/api/pair/ping", {"pair": self.c["code"]}, 10)
+            return status == 200 and bool(json.loads(raw).get("web"))
+        except Exception: return False
+
+    def enqueue(self, body):
+        body["auto"] = False
+        self.pending.append(body); del self.pending[:-40]
+        n = len(self.pending)
+        self.ui.log(T("q_log", n=n))
+        if self.c["sounds"]: play("queued")
+        if self.c["notify"]: notify(T("q_notify"))
+        self.ui.event("queue", n); self.show_running(); self.ui.event("popup", None)
+
+    def flush(self):
+        try:
+            if not self.pending or not self.ping(): return
+            sent = 0
+            while self.pending:
+                try:
+                    status, _ = post(self.c["url"] + "/api/pair/scan", self.pending[0])
+                    if status == 429: break
+                except Exception: break
+                self.pending.pop(0); sent += 1
+            if sent:
+                self.ui.log(T("q_sent", n=sent))
+                if self.c["sounds"]: play("ok")
+                if self.c["notify"]: notify(T("q_sent", n=sent))
+            self.ui.event("queue", len(self.pending))
+            if self.running: self.show_running()
+            elif not self.pending: self.ui.state(T("stopped"), "muted")
+        finally: self.flushing = False
 
     def scan(self, auto):
         if self.busy:
@@ -1060,7 +1104,10 @@ class Scanner:
                 self.ui.log(T("ocr_fail") + f" {e}")
                 if not auto: self.ui.state(T("ocr_fail"), "bad")
                 return
-            body = {"pair": self.c["code"], "auto": auto, "ocr": ocr, "image": jpeg64(im)}
+            body = {"pair": self.c["code"], "auto": auto, "ocr": ocr, "image": jpeg64(im), "time": int(time.time() * 1000)}
+            # Nur senden, wenn die Website offen ist, sonst in der App stapeln
+            if self.pending or not self.ping():
+                self.enqueue(body); return
             try: status, raw = post(self.c["url"] + "/api/pair/scan", body)
             except Exception as e:
                 self.ui.log(T("send_fail") + f" {e}"); self.ui.state(T("unreach"), "bad")
@@ -1348,6 +1395,7 @@ class App:
         self.lbl(c, T("code_lbl"), fg=C["muted"], size=9).pack(anchor="w")
         self.code = self.entry(c, self.c["code"], mono=True); self.code.pack(fill="x", pady=(2, 4), ipady=4)
         self.lbl(c, T("code_hint"), fg=C["dim"], size=8, wrap=320).pack(anchor="w")
+        self.qlbl = self.lbl(c, T("q_code", n=len(self.sc.pending)) if self.sc.pending else "", fg=C["warn"], size=9, bold=True); self.qlbl.pack(anchor="w")
         for e in (self.url, self.code): e.bind("<FocusOut>", lambda ev: self.apply())
 
         c = self.card(p, T("keys_title"))
@@ -1464,6 +1512,7 @@ class App:
     def event(self, what, val): self.q.put((what, val))
 
     def sub_text(self, kind):
+        if self.sc.pending and kind == "warn": return T("q_sub")
         if self.sc.running and kind in ("good", "warn"):
             return T("sub_auto", n=self.c["interval"]) if self.c["mode"] == "auto" else T("sub_hot", k=pretty_key(self.c["scan_key"]))
         if not self.sc.running and kind == "muted": return T("sub_stopped")
@@ -1512,6 +1561,18 @@ class App:
                     for n in ("scan_key", "auto_key"): self.keys[n].set(pretty_key(self.c[n]))
                     self.save()
                 elif kind == "running": self.render_state()
+                elif kind == "queue":
+                    l = getattr(self, "qlbl", None)
+                    if l and l.winfo_exists(): l.config(text=T("q_code", n=v) if v else "")
+                    ls = getattr(self, "last_s", None)
+                    if v and ls and ls.winfo_exists(): ls.config(text=T("q_sub"))
+                elif kind == "popup":
+                    # Fenster zeigen und nach vorne holen, ohne es dauerhaft oben zu halten
+                    self.root.deiconify(); self.root.lift()
+                    try:
+                        self.root.attributes("-topmost", True)
+                        self.root.after(1500, lambda: self.root.attributes("-topmost", bool(self.c.get("topmost") or self.c.get("pinned"))))
+                    except Exception: pass
                 elif kind == "show":
                     self.root.deiconify(); self.root.lift()
                 elif kind == "cmd":

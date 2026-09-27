@@ -5,8 +5,8 @@ namespace CargoDeckScanner;
 // Leise, weiche Töne statt dem lauten Systempiepen
 static class Sound
 {
-    public enum Kind { On, Off, Success, Error }
-    public const Kind On = Kind.On, Off = Kind.Off, Success = Kind.Success, Error = Kind.Error;
+    public enum Kind { On, Off, Success, Error, Queued }
+    public const Kind On = Kind.On, Off = Kind.Off, Success = Kind.Success, Error = Kind.Error, Queued = Kind.Queued;
 
     static readonly Dictionary<Kind, byte[]> Cache = new();
     static SoundPlayer _player;
@@ -22,6 +22,7 @@ static class Sound
                     Kind.On => Make((660, 0, 0.09), (880, 0.07, 0.14)),
                     Kind.Off => Make((740, 0, 0.09), (554, 0.07, 0.14)),
                     Kind.Success => Make((784, 0, 0.08), (988, 0.06, 0.08), (1319, 0.12, 0.18)),
+                    Kind.Queued => Make((698, 0, 0.12)),   // ein einzelner, kurzer, leiser Ton
                     _ => Make((330, 0, 0.16)),
                 };
                 Cache[kind] = wav;

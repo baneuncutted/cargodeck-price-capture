@@ -1,0 +1,24 @@
+Titel
+Cargo Deck Price Capture 1.6.0
+
+Tag
+V1.6.0
+
+Beschreibung
+**Scans warten auf die Website.** Ist Cargo Deck gerade nicht im Browser offen, sammelt Price Capture deine Scans unter dem Kopplungscode. Ein leiser Ton sagt dir Bescheid und das Fenster zeigt sich, ohne dem Spiel den Fokus zu nehmen. Sobald du die Website öffnest, gehen alle gespeicherten Scans automatisch raus.
+
+Auf der Website prüfst du jeden Scan und bestätigst ihn, bevor die Preise übernommen werden. So kannst du kleine Lesefehler selbst ausbessern.
+
+**Welche Datei?**
+- `CargoDeckPriceCapture.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckPriceCapture-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+---
+
+**Scans wait for the website.** If Cargo Deck is not open in your browser, Price Capture keeps your scans under the pairing code. A quiet sound lets you know and the window shows up without taking focus from the game. As soon as you open the website, all stored scans are sent automatically.
+
+On the website you check and confirm every scan before the prices are taken. That way you can fix small reading errors yourself.
+
+**Which file?**
+- `CargoDeckPriceCapture.exe` is for **Windows** 10 and 11. Just download and run, no installation.
+- `CargoDeckPriceCapture-linux.tar.gz` is for **Linux**. Extract it and run `./install.sh`.

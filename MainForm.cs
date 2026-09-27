@@ -31,6 +31,10 @@ class MainForm : Form
     bool running, busy, wasScan, wasAuto;
     string lastPrint = "";
     DateTime nextAuto = DateTime.MinValue, lastPing = DateTime.MinValue;
+    // Scans, die gewartet haben, weil die Website nicht offen war. Werden gesendet, sobald sie offen ist.
+    readonly List<JsonObject> queue = new();
+    bool flushing, popped;
+    DateTime lastWebCheck = DateTime.MinValue;
     readonly List<string> logLines = new();
     string lastTitle, lastSub, stateTitle, stateSub;
     Color stateCol = cDim;
@@ -44,7 +48,8 @@ class MainForm : Form
     KeyBox kScan, kAuto;
     NumericUpDown nInt;
     Toggle cAutoMode, cSound, cNotify, cAutostart, cTop;
-    Label lState, lStateSub, lLast, lLastSub, lEngine, lMiniState, lMiniSub, lMiniLast;
+    Label lState, lStateSub, lLast, lLastSub, lEngine, lMiniState, lMiniSub, lMiniLast, lQueue;
+    RButton bQueueOpen;
     Panel dot, miniDot;
     ListBox log;
     NotifyIcon tray;
@@ -194,6 +199,7 @@ class MainForm : Form
 
         BuildScan(); BuildSettings(); BuildHelp(); BuildMini();
         ShowPage(page);
+        ShowQueue();
         ResumeLayout();
     }
 
@@ -218,6 +224,8 @@ class MainForm : Form
         var ls = Card(p, 300, 96, T("last_title"));
         lLast = L(ls, lastTitle, 16, 34, cText, 12f, true, 336, 26);
         lLastSub = L(ls, lastSub, 16, 62, cMuted, 9f, false, 336, 30);
+        bQueueOpen = Btn(ls, T("q_open"), 222, 6, 132, 28, true, null, 9f);
+        bQueueOpen.Click += (s, e) => OpenSite();
 
         var lg = Card(p, 408, FH - 116 - 12 - 408, T("log_title"));
         log = new ListBox { Left = S(12), Top = S(34), Width = S(344), Height = lg.Height - S(44), BackColor = cPanel, ForeColor = cMuted, BorderStyle = BorderStyle.None, IntegralHeight = false, Font = new Font("Segoe UI", 9f), SelectionMode = SelectionMode.None };
@@ -247,6 +255,7 @@ class MainForm : Form
         L(pv, T("code"), 16, 96, cMuted, 9f);
         tCode = Tb(pv, 16, 116, 164, true); tCode.CharacterCasing = CharacterCasing.Upper; tCode.MaxLength = 12;
         Wrap(pv, T("code_hint"), 190, 114, 164, cMuted, 8.5f);
+        lQueue = L(pv, "", 16, 150, cWarn, 9f, true, 336, 20);
 
         var pk = Card(p, 188, 186, T("keys_title"));
         L(pk, T("keys_hint"), 16, 30, cDim, 8.5f);
@@ -315,7 +324,7 @@ class MainForm : Form
         tc.Height = S(ty + 6);
         y += (int)Math.Ceiling(tc.Height / k) + 12;
         var bo = Btn(p, T("open_site"), x, y, w, 40, true, "  ", 10.5f);
-        bo.Click += (s, e) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(string.IsNullOrWhiteSpace(cfg.Url) ? "https://cargodeck.onrender.com" : cfg.Url) { UseShellExecute = true }); } catch { } };
+        bo.Click += (s, e) => OpenSite();
         L(p, " ", x, y + 52, cBg, 6f);   // Platz unten beim Scrollen
     }
 
@@ -515,7 +524,7 @@ class MainForm : Form
         if (cfg.Sounds) Sound.Play(kind);
     }
     (string, string) RunningText() => cfg.Mode == "auto" ? (T("run_auto"), T("run_auto_sub", cfg.Interval)) : (T("run_hot"), T("run_hot_sub", cfg.ScanKey));
-    void ShowRunning() { var (t, s) = RunningText(); SetState(t, s, cGood); }
+    void ShowRunning() { if (queue.Count > 0) { ShowQueue(); return; } var (t, s) = RunningText(); SetState(t, s, cGood); }
 
     void StartScanner()
     {
@@ -557,20 +566,107 @@ class MainForm : Form
                 else { cAutoMode.Checked = true; Log(T("auto_on", cfg.Interval)); Beep(Sound.On); Notify(T("auto_on", cfg.Interval)); }
             }
             if (DateTime.Now - lastPing > TimeSpan.FromSeconds(30)) { lastPing = DateTime.Now; _ = Ping(); }
+            if (queue.Count > 0 && !flushing && DateTime.Now - lastWebCheck > TimeSpan.FromSeconds(4)) _ = Flush();
             if (scanEdge) await Scan(false);
             else if (cAutoMode.Checked && !busy && DateTime.Now >= nextAuto) { nextAuto = DateTime.Now.AddSeconds(cfg.Interval); await Scan(true); }
         }
         catch (Exception ex) { Log(T("err", ex.Message)); busy = false; }
     }
 
-    async Task Ping()
+    // Fragt nebenbei, ob die Website mit diesem Code gerade offen ist
+    async Task<bool> Ping()
     {
+        lastWebCheck = DateTime.Now;
         try
         {
             using var c = new StringContent(JsonSerializer.Serialize(new { pair = cfg.Code }), Encoding.UTF8, "application/json");
-            await Http.PostAsync(cfg.Url + "/api/pair/ping", c);
+            var r = await Http.PostAsync(cfg.Url + "/api/pair/ping", c);
+            var j = JsonNode.Parse(await r.Content.ReadAsStringAsync());
+            return r.IsSuccessStatusCode && ((bool?)j?["web"] ?? false);
+        }
+        catch { return false; }
+    }
+
+    void OpenSite()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(string.IsNullOrWhiteSpace(cfg.Url) ? "https://cargodeck.onrender.com" : cfg.Url) { UseShellExecute = true }); } catch { }
+    }
+
+    // Website nicht offen: Scan merken, leiser Ton, Fenster zeigt sich ohne dem Spiel den Fokus zu nehmen
+    void Enqueue(JsonObject body)
+    {
+        body["auto"] = false;
+        queue.Add(body); while (queue.Count > 40) queue.RemoveAt(0);
+        Log(T("q_log", queue.Count));
+        Beep(Sound.Queued); Notify(T("q_notify"));
+        ShowQueue(); PopUp();
+    }
+
+    void ShowQueue()
+    {
+        int n = queue.Count;
+        if (lQueue != null) lQueue.Text = n > 0 ? T("q_code", n) : "";
+        if (bQueueOpen != null) bQueueOpen.Visible = n > 0;
+        if (n > 0)
+        {
+            SetState(n == 1 ? T("q_title1") : T("q_title", n), T("q_sub"), cWarn);
+            SetLast(n == 1 ? T("q_title1") : T("q_title", n), T("q_sub"));
+        }
+    }
+
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    bool noActivate;
+    protected override bool ShowWithoutActivation => noActivate || base.ShowWithoutActivation;
+    void PopUp()
+    {
+        try
+        {
+            noActivate = true;
+            if (!Visible) Show();
+            if (WindowState == FormWindowState.Minimized) ShowWindow(Handle, 4);   // wiederherstellen ohne Fokus
+            if (!cfg.Pinned) ShowPage(0);
+            SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);   // kurz ganz nach vorne, ohne Fokus
+            popped = true;
         }
         catch { }
+        finally { noActivate = false; }
+    }
+
+    // Sobald die Website offen ist, alles Gespeicherte der Reihe nach senden
+    async Task Flush()
+    {
+        if (flushing || queue.Count == 0) return;
+        flushing = true;
+        try
+        {
+            if (!await Ping()) return;
+            int sent = 0;
+            while (queue.Count > 0)
+            {
+                var body = queue[0];
+                try
+                {
+                    using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+                    var resp = await Http.PostAsync(cfg.Url + "/api/pair/scan", content);
+                    if ((int)resp.StatusCode == 429) break;
+                }
+                catch { break; }
+                queue.RemoveAt(0); sent++;
+            }
+            if (sent > 0)
+            {
+                Log(T("q_sent", sent)); Beep(Sound.Success); Notify(T("q_sent", sent));
+                SetLast(T("q_sent", sent), T("last_look"));
+            }
+            ShowQueue();
+            if (queue.Count == 0)
+            {
+                if (running) ShowRunning();
+                if (popped) { popped = false; if (!cfg.Pinned && !cfg.TopMost) SetWindowPos(Handle, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); }
+            }
+        }
+        finally { flushing = false; }
     }
 
     // ---------------- Scannen ----------------
@@ -649,7 +745,13 @@ class MainForm : Form
                 if (!TerminalWords.IsMatch(txt)) return;
             }
 
-            var body = new JsonObject { ["pair"] = cfg.Code, ["auto"] = auto, ["ocr"] = ocr, ["image"] = img };
+            var body = new JsonObject { ["pair"] = cfg.Code, ["auto"] = auto, ["ocr"] = ocr, ["image"] = img, ["time"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+            // Nur senden, wenn die Website offen ist. Sonst in der App stapeln, bis sie offen ist.
+            if (queue.Count > 0 || !await Ping())
+            {
+                Enqueue(body);
+                return;
+            }
             HttpResponseMessage resp;
             string raw;
             try
