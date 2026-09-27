@@ -22,6 +22,13 @@ jobs:
             [ -n "$p" ] || { echo "Fehlt: $f"; exit 1; }
             cp "$p" out/cargodeck-scanner-linux/
           done
+          # Modelle der Texterkennung (PaddleOCR)
+          mkdir -p out/cargodeck-scanner-linux/ocr
+          for f in det.onnx rec.onnx dict.txt LICENSES.txt; do
+            p=$(find . -name "$f" -not -path "./out/*" -not -path "./.git/*" | head -1)
+            [ -n "$p" ] || { echo "Fehlt: $f"; exit 1; }
+            cp "$p" out/cargodeck-scanner-linux/ocr/
+          done
           cp LICENSE out/cargodeck-scanner-linux/ 2>/dev/null || true
           python3 -m py_compile out/cargodeck-scanner-linux/cargodeck-scanner.py
           bash -n out/cargodeck-scanner-linux/install.sh
