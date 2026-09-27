@@ -1,0 +1,24 @@
+Titel
+Cargo Deck Scanner 1.5.1
+
+Tag
+V1.5.1
+
+Beschreibung
+**Welche Datei?**
+- `CargoDeckScanner.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckScanner-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+**Neu in 1.5.1**
+- Neues Logo, das gleiche wie auf der Website. Als App Symbol, in der Taskleiste, im Store und unter Linux.
+- Linux: scharfes Logo oben in der App.
+
+---
+
+**Which file?**
+- `CargoDeckScanner.exe` is for **Windows** 10 and 11. Just download and run, no installation.
+- `CargoDeckScanner-linux.tar.gz` is for **Linux**. Extract it and run `./install.sh`.
+
+**New in 1.5.1**
+- New logo, the same as on the website. As app icon, in the taskbar, in the Store and on Linux.
+- Linux: sharp logo at the top of the app.

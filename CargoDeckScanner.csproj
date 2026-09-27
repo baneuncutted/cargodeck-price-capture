@@ -12,7 +12,7 @@
     <RootNamespace>CargoDeckScanner</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.5.0</Version>
+    <Version>1.5.1</Version>
     <Product>Cargo Deck Scanner</Product>
     <Company>Cargo Deck</Company>
     <Description>Liest Star Citizen Handelsterminals und schickt die Preise an Cargo Deck</Description>

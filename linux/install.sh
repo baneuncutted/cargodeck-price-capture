@@ -75,6 +75,7 @@ fi
 # ---- Dateien
 mkdir -p "$DEST" "$BIN" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps"
 cp cargodeck-scanner.py cargodeck-scanner.png "$DEST/"
+[ -f cargodeck-scanner-36.png ] && cp cargodeck-scanner-36.png "$DEST/"
 # Modelle der Texterkennung
 mkdir -p "$DEST/ocr"
 for f in det.onnx rec.onnx dict.txt LICENSES.txt; do

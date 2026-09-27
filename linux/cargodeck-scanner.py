@@ -5,7 +5,7 @@
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -1110,7 +1110,9 @@ class App:
             icon = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cargodeck-scanner.png")
             if os.path.exists(icon):
                 img = tk.PhotoImage(file=icon); root.iconphoto(True, img)
-                f = max(1, img.width() // 36); self.icon_img = img.subsample(f, f)
+                small = os.path.join(os.path.dirname(icon), "cargodeck-scanner-36.png")
+                if os.path.exists(small): self.icon_img = tk.PhotoImage(file=small)
+                else: f = max(1, img.width() // 36); self.icon_img = img.subsample(f, f)
         except Exception: pass
         st = ttk.Style(root)
         try: st.theme_use("clam")

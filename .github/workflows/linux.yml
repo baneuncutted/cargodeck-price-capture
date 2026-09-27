@@ -17,7 +17,7 @@ jobs:
         # egal ob im Ordner linux oder beim Hochladen im Web direkt im Hauptordner gelandet
         run: |
           mkdir -p out/cargodeck-scanner-linux
-          for f in cargodeck-scanner.py install.sh uninstall.sh cargodeck-scanner.png README-linux.md; do
+          for f in cargodeck-scanner.py install.sh uninstall.sh cargodeck-scanner.png cargodeck-scanner-36.png README-linux.md; do
             p=$(find . -name "$f" -not -path "./out/*" -not -path "./.git/*" | head -1)
             [ -n "$p" ] || { echo "Fehlt: $f"; exit 1; }
             cp "$p" out/cargodeck-scanner-linux/
