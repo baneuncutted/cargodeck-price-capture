@@ -26,6 +26,7 @@ static class Program
         AppDomain.CurrentDomain.UnhandledException += (s, e) => Crash(e.ExceptionObject as Exception, false);
         TaskScheduler.UnobservedTaskException += (s, e) => { Crash(e.Exception, false); e.SetObserved(); };
 
+        Lang.En = Config.Load().Lang == "en";
         using var mutex = new Mutex(true, "CargoDeckScanner_single", out bool first);
         if (!first && args.Contains("--restart"))
         {
@@ -34,11 +35,14 @@ static class Program
         }
         if (!first && !args.Contains("--ui-shot"))
         {
-            MessageBox.Show("Der Cargo Deck Scanner läuft schon. Du findest ihn unten rechts bei den Symbolen neben der Uhr.", "Cargo Deck Scanner");
+            MessageBox.Show(Lang.T("already"), "Cargo Deck Scanner");
             return 0;
         }
         ApplicationConfiguration.Initialize();
         var form = new MainForm(args.Contains("--tray") || Packaged.StartedByWindows(), args.Contains("--run"));
+        // Prüfmodus für Bilder der Oberfläche: bestimmten Reiter zeigen
+        int pg = Array.IndexOf(args, "--page");
+        if (pg >= 0 && pg + 1 < args.Length && int.TryParse(args[pg + 1], out var pgi)) form.Shown += (s, e) => form.DebugPage(pgi);
         // Prüfmodus, speichert ein Bild vom Fenster und beendet sich
         int ui = Array.IndexOf(args, "--ui-shot");
         if (ui >= 0 && ui + 1 < args.Length)
@@ -66,6 +70,6 @@ static class Program
             File.AppendAllText(Path.Combine(dir, "scanner-fehler.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {ex}\r\n\r\n");
         }
         catch { }
-        if (show) try { MessageBox.Show("Da ist etwas schiefgelaufen, der Scanner läuft aber weiter.\n\n" + ex?.Message + "\n\nDetails stehen in %APPDATA%\\CargoDeck\\scanner-fehler.log", "Cargo Deck Scanner"); } catch { }
+        if (show) try { MessageBox.Show(Lang.T("crash") + "\n\n" + ex?.Message + "\n\n" + Lang.T("crash_log"), "Cargo Deck Scanner"); } catch { }
     }
 }

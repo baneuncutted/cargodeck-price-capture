@@ -12,7 +12,7 @@
     <RootNamespace>CargoDeckScanner</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.3.0</Version>
+    <Version>1.5.0</Version>
     <Product>Cargo Deck Scanner</Product>
     <Company>Cargo Deck</Company>
     <Description>Liest Star Citizen Handelsterminals und schickt die Preise an Cargo Deck</Description>
@@ -27,6 +27,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="app.ico" />
+    <!-- Texterkennung (PaddleOCR). Gesucht wird nach Namen, egal in welchem Ordner die Dateien liegen -->
+    <EmbeddedResource Include="**\det.onnx" Exclude="bin\**;obj\**;out\**;pkg\**" LogicalName="ocr.det.onnx" />
+    <EmbeddedResource Include="**\rec.onnx" Exclude="bin\**;obj\**;out\**;pkg\**" LogicalName="ocr.rec.onnx" />
+    <EmbeddedResource Include="**\dict.txt" Exclude="bin\**;obj\**;out\**;pkg\**;linux\**" LogicalName="ocr.dict.txt" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
   </ItemGroup>
 
 </Project>

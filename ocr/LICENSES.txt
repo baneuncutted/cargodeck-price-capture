@@ -1,0 +1,8 @@
+Texterkennung auf Cargo Deck
+
+PaddleOCR Modelle (PP-OCRv4 Textzeilen, PP-OCRv5 Englisch), Apache License 2.0
+https://github.com/PaddlePaddle/PaddleOCR
+ONNX Fassung: https://huggingface.co/monkt/paddleocr-onnx und RapidOCR (https://github.com/RapidAI/RapidOCR), Apache License 2.0
+
+ONNX Runtime Web 1.20.1, MIT License, Copyright (c) Microsoft Corporation
+https://github.com/microsoft/onnxruntime

@@ -49,8 +49,38 @@ static class Ocr
 
     public static Task<JsonObject> Run(Bitmap src) => Run(new List<Bitmap> { src });
 
-    // shots[0] ist das Hauptbild, weitere Bilder kurz danach helfen gegen Flimmern im Spiel
+    // Zuerst PaddleOCR (gleiche Technik wie die Website), nur wenn das nicht geht die Windows Texterkennung
     public static async Task<JsonObject> Run(IList<Bitmap> shots)
+    {
+        var p = PaddleOcr.Get();
+        if (p != null)
+        {
+            try
+            {
+                var r = p.Read(ToPaddle(shots[0]));
+                if (r["passes"].AsArray().Any(x => x["lines"].AsArray().Count > 0)) return r;
+            }
+            catch (Exception ex) { PaddleOcr.LoadError ??= ex.Message; }
+        }
+        return await RunWindows(shots);
+    }
+
+    // Bild als BGR Bytes für PaddleOCR
+    public static PaddleImage ToPaddle(Bitmap src)
+    {
+        var data = src.LockBits(new Rectangle(0, 0, src.Width, src.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            int w = src.Width, h = src.Height, row = w * 3;
+            var buf = new byte[row * h];
+            for (int y = 0; y < h; y++) Marshal.Copy(data.Scan0 + y * data.Stride, buf, y * row, row);
+            return new PaddleImage(w, h, buf);
+        }
+        finally { src.UnlockBits(data); }
+    }
+
+    // shots[0] ist das Hauptbild, weitere Bilder kurz danach helfen gegen Flimmern im Spiel
+    public static async Task<JsonObject> RunWindows(IList<Bitmap> shots)
     {
         var engine = Engine();
         var src = shots[0];

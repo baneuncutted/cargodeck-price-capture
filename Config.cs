@@ -17,6 +17,14 @@ class Config
     public bool Notify { get; set; } = true;
     public bool Autostart { get; set; } = false;
     public bool StartMinimized { get; set; } = false;
+    public string Lang { get; set; } = "";          // de oder en, leer = wie Windows
+    public bool Pinned { get; set; } = false;       // kleines Fenster immer im Vordergrund, wie beim Windows Rechner
+    public bool TopMost { get; set; } = false;      // großes Fenster immer im Vordergrund
+    public int PinX { get; set; } = -1;
+    public int PinY { get; set; } = -1;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern ushort GetUserDefaultUILanguage();
+    public static string SystemLang() { try { return (GetUserDefaultUILanguage() & 0x3FF) == 0x07 ? "de" : "en"; } catch { return "de"; } }
 
     static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CargoDeck");
     static string FilePath => Path.Combine(Dir, "scanner.json");
@@ -34,11 +42,12 @@ class Config
                 if (string.IsNullOrEmpty(c.AutoKey)) c.AutoKey = "ä";
                 if (c.ScanVk <= 0) c.ScanVk = KeyNames.FromChar(c.ScanKey);
                 if (c.AutoVk <= 0) c.AutoVk = KeyNames.FromChar(c.AutoKey);
+                if (c.Lang != "de" && c.Lang != "en") c.Lang = SystemLang();
                 return c;
             }
         }
         catch { }
-        var n = new Config(); n.ScanVk = KeyNames.FromChar(n.ScanKey); n.AutoVk = KeyNames.FromChar(n.AutoKey); return n;
+        var n = new Config(); n.ScanVk = KeyNames.FromChar(n.ScanKey); n.AutoVk = KeyNames.FromChar(n.AutoKey); n.Lang = SystemLang(); return n;
     }
 
     public void Save()

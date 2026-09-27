@@ -7,41 +7,51 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using static CargoDeckScanner.Lang;
 
 namespace CargoDeckScanner;
 
 class MainForm : Form
 {
-    // Farben wie auf der Seite
+    // Farben wie auf der Website
     static readonly Color cBg = Color.FromArgb(0x0c, 0x11, 0x19), cPanel = Color.FromArgb(0x14, 0x1c, 0x28), cPanel2 = Color.FromArgb(0x1a, 0x24, 0x33),
-        cLine = Color.FromArgb(0x24, 0x31, 0x42), cText = Color.FromArgb(0xee, 0xf3, 0xf9), cMuted = Color.FromArgb(0x8f, 0x9d, 0xb1),
-        cAccent = Color.FromArgb(0x35, 0xd6, 0xcc), cGood = Color.FromArgb(0x4a, 0xde, 0x80), cBad = Color.FromArgb(0xf8, 0x71, 0x71),
+        cLine = Color.FromArgb(0x24, 0x31, 0x42), cLine2 = Color.FromArgb(0x30, 0x40, 0x56), cText = Color.FromArgb(0xee, 0xf3, 0xf9), cMuted = Color.FromArgb(0x8f, 0x9d, 0xb1),
+        cDim = Color.FromArgb(0x66, 0x74, 0x8a), cAccent = Color.FromArgb(0x35, 0xd6, 0xcc), cGood = Color.FromArgb(0x4a, 0xde, 0x80), cBad = Color.FromArgb(0xf8, 0x71, 0x71),
         cWarn = Color.FromArgb(0xfb, 0xbf, 0x24), cDark = Color.FromArgb(0x0b, 0x0f, 0x14);
 
     static readonly Regex TerminalWords = new("COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", RegexOptions.IgnoreCase);
     static readonly Regex CodeRe = new("^[A-Z2-9]{12}$");
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
+    // Größe in logischen Pixeln: großes Fenster hochkant, kleines Fenster im Vordergrund wie beim Windows Rechner
+    const int FW = 400, FH = 790, MW = 300, MH = 172;
+
     readonly Config cfg = Config.Load();
     readonly bool startInTray;
     bool running, busy, wasScan, wasAuto;
     string lastPrint = "";
     DateTime nextAuto = DateTime.MinValue, lastPing = DateTime.MinValue;
+    readonly List<string> logLines = new();
+    string lastTitle, lastSub, stateTitle, stateSub;
+    Color stateCol = cDim;
+    int page;
 
+    // Bedienelemente, werden beim Sprachwechsel neu gebaut
+    Panel full, mini, pgScan, pgSet, pgHelp;
+    Seg nav, langSeg;
+    RButton bPin, bUnpin, bStart, bNow, bSave, bMiniScan, bMiniAuto;
     TextBox tUrl, tCode;
     KeyBox kScan, kAuto;
-    Button bSave;
-    RadioButton rHot, rAuto;
     NumericUpDown nInt;
-    Toggle cSound, cNotify, cAutostart;
-    bool loading;
-    Button bStart, bNow;
-    Label lState;
-    Panel dot;
+    Toggle cAutoMode, cSound, cNotify, cAutostart, cTop;
+    Label lState, lStateSub, lLast, lLastSub, lEngine, lMiniState, lMiniSub, lMiniLast;
+    Panel dot, miniDot;
     ListBox log;
     NotifyIcon tray;
     ToolStripMenuItem miAuto;
+    ToolTip tips;
     System.Windows.Forms.Timer timer;
+    bool loading;
 
     float k;
     int S(float v) => (int)Math.Round(v * k);
@@ -50,6 +60,7 @@ class MainForm : Form
     public MainForm(bool tray, bool run = false)
     {
         startInTray = tray; startRun = run;
+        Lang.En = cfg.Lang == "en";
         AutoScaleMode = AutoScaleMode.None;
         k = DeviceDpi / 96f;
         Text = "Cargo Deck Scanner";
@@ -57,15 +68,19 @@ class MainForm : Form
         Font = new Font("Segoe UI", 9.75f);
         FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(S(500), S(828));
         using (var s = typeof(MainForm).Assembly.GetManifestResourceStream("CargoDeckScanner.app.ico"))
             if (s != null) Icon = new Icon(s);
+        stateTitle = T("stopped"); stateSub = T("stopped_sub");
+        lastTitle = T("last_none"); lastSub = "";
         Build();
         LoadForm();
         SetupTray();
+        ApplyPin(false);
         timer = new System.Windows.Forms.Timer { Interval = 50 };
         timer.Tick += Tick;
         timer.Start();
+        // Texterkennung schon mal im Hintergrund laden, der erste Scan ist dann schneller
+        Task.Run(() => { PaddleOcr.Get(); try { BeginInvoke(new Action(ShowEngine)); } catch { } });
     }
 
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
@@ -73,161 +88,340 @@ class MainForm : Form
     {
         base.OnHandleCreated(e);
         int on = 1; try { DwmSetWindowAttribute(Handle, 20, ref on, 4); } catch { }   // dunkle Titelleiste
+        try { int c = 0x00191110; DwmSetWindowAttribute(Handle, 35, ref c, 4); } catch { }   // Titelleiste in der Farbe der Seite (Windows 11)
+        try { int r = 2; DwmSetWindowAttribute(Handle, 33, ref r, 4); } catch { }   // runde Ecken (Windows 11)
     }
 
-    // ---------------- Aufbau ----------------
+    // Dunkle Scrollleisten wie im Windows Explorer im Dunkelmodus
+    [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h, string app, string id);
+    static void Dark(Control c) { c.HandleCreated += (s, e) => { try { SetWindowTheme(c.Handle, "DarkMode_Explorer", null); } catch { } }; }
+
+    // ---------------- Bausteine ----------------
+    static Color FillOf(Control p) => p is CardPanel cp ? cp.Fill : p.BackColor;
     Label L(Control parent, string text, int x, int y, Color? col = null, float size = 9.75f, bool bold = false, int w = 0, int h = 0)
     {
-        var l = new Label { Text = text, Left = S(x), Top = S(y), AutoSize = w == 0, ForeColor = col ?? cText, BackColor = parent.BackColor, Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular) };
+        var l = new Label { Text = text, Left = S(x), Top = S(y), AutoSize = w == 0, ForeColor = col ?? cText, BackColor = FillOf(parent), Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular), UseMnemonic = false };
         if (w > 0) { l.Width = S(w); l.Height = S(h > 0 ? h : 22); }
         parent.Controls.Add(l); return l;
     }
-    TextBox T(Control parent, int x, int y, int w, bool mono = false)
+    // Text mit Zeilenumbruch, Höhe passt sich an. Gibt die Unterkante zurück.
+    int Wrap(Control parent, string text, int x, int y, int w, Color col, float size = 9.5f, bool bold = false)
     {
-        var t = new TextBox { Left = S(x), Top = S(y), Width = S(w), BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle, Font = mono ? new Font("Consolas", 12f, FontStyle.Bold) : new Font("Segoe UI", 11f) };
+        var f = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular);
+        var sz = TextRenderer.MeasureText(text, f, new Size(S(w), int.MaxValue), TextFormatFlags.WordBreak);
+        var l = new Label { Text = text, Left = S(x), Top = S(y), Width = S(w), Height = sz.Height + S(2), ForeColor = col, BackColor = FillOf(parent), Font = f, UseMnemonic = false };
+        parent.Controls.Add(l);
+        return y + (int)Math.Ceiling(l.Height / k);
+    }
+    TextBox Tb(Control parent, int x, int y, int w, bool mono = false)
+    {
+        var t = new TextBox { Left = S(x), Top = S(y), Width = S(w), BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle, Font = mono ? new Font("Consolas", 12.5f, FontStyle.Bold) : new Font("Segoe UI", 11f) };
         parent.Controls.Add(t); return t;
     }
-    Button B(string text, int x, int y, int w, int h, bool primary)
+    RButton Btn(Control parent, string text, int x, int y, int w, int h, bool primary, string icon = null, float size = 10.5f)
     {
-        var b = new Button { Text = text, Left = S(x), Top = S(y), Width = S(w), Height = S(h), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false };
-        StyleButton(b, primary);
-        Controls.Add(b); return b;
-    }
-    void StyleButton(Button b, bool primary)
-    {
-        b.BackColor = primary ? cAccent : cPanel2; b.ForeColor = primary ? cDark : cText;
-        b.FlatAppearance.BorderColor = primary ? cAccent : cLine; b.FlatAppearance.BorderSize = 1;
-        b.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(0x5b, 0xe4, 0xdb) : Color.FromArgb(0x21, 0x2d, 0x3e);
-        b.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(0x1a, 0xa3, 0x9b) : cLine;
+        var b = new RButton { Text = text, Left = S(x), Top = S(y), Width = S(w), Height = S(h), Primary = primary, Icon = icon, ForeColor = cText, Font = new Font("Segoe UI", size, FontStyle.Bold), Accent = cAccent, Fill = cPanel2, Line = cLine2 };
+        parent.Controls.Add(b); return b;
     }
     Toggle Tg(Control parent, string text, int x, int y)
     {
-        var t = new Toggle { Text = text, Left = S(x), Top = S(y), BackColor = parent.BackColor, ForeColor = cText, OnColor = cAccent, OffColor = cLine, Font = new Font("Segoe UI", 9.75f) };
+        var t = new Toggle { Text = text, Left = S(x), Top = S(y), BackColor = FillOf(parent), ForeColor = cText, OnColor = cAccent, OffColor = cLine2, Font = new Font("Segoe UI", 10f) };
         t.Size = t.Measure();
         parent.Controls.Add(t); return t;
     }
     KeyBox KB(Control parent, int x, int y)
     {
-        var k = new KeyBox { Left = S(x), Top = S(y), Width = S(96), Height = S(28), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false, BackColor = cPanel2, ForeColor = cText, TabStop = true };
-        k.FlatAppearance.BorderColor = cLine; k.FlatAppearance.MouseOverBackColor = Color.FromArgb(0x21, 0x2d, 0x3e);
-        k.Changed += (s, e) => { StyleButton(bSave, true); Log($"Neue Taste {KeyNames.Name(k.Vk)}, jetzt speichern"); };
-        parent.Controls.Add(k); return k;
+        var kb = new KeyBox { Left = S(x), Top = S(y), Width = S(96), Height = S(30), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false, BackColor = cPanel2, ForeColor = cAccent, TabStop = true };
+        kb.FlatAppearance.BorderColor = cLine2; kb.FlatAppearance.MouseOverBackColor = Color.FromArgb(0x21, 0x2d, 0x3e);
+        kb.Changed += (s, e) => { bSave.Primary = true; bSave.Invalidate(); Log(T("new_key", KeyNames.Name(kb.Vk))); };
+        parent.Controls.Add(kb); return kb;
     }
-    RadioButton R(Control parent, string text, int x, int y)
+    CardPanel Card(Control parent, int y, int h, string title, int x = 0, int w = 368)
     {
-        var r = new RadioButton { Text = text, Left = S(x), Top = S(y), AutoSize = true, ForeColor = cText, BackColor = parent.BackColor, Cursor = Cursors.Hand };
-        parent.Controls.Add(r); return r;
-    }
-    Panel Card(int y, int h, string title)
-    {
-        var p = new CardPanel { Left = S(16), Top = S(y), Width = S(468), Height = S(h), BackColor = cPanel, LineColor = cLine, GlowColor = cAccent };
-        Controls.Add(p);
+        var p = new CardPanel { Left = S(x), Top = S(y), Width = S(w), Height = S(h), Fill = cPanel, LineColor = cLine, GlowColor = cAccent, BackColor = cPanel };
+        parent.Controls.Add(p);
         if (title != null) L(p, title.ToUpperInvariant(), 16, 12, cMuted, 8.25f, true);
         return p;
     }
+    Panel Dot(Control parent, int x, int y, int size)
+    {
+        var d = new Panel { Left = S(x), Top = S(y), Width = S(size), Height = S(size), BackColor = FillOf(parent) };
+        d.Paint += (s, e) =>
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var col = stateCol;
+            using (var glow = new SolidBrush(Color.FromArgb(50, col))) e.Graphics.FillEllipse(glow, 0, 0, d.Width - 1, d.Height - 1);
+            float m = d.Width * 0.22f;
+            using var b = new SolidBrush(col); e.Graphics.FillEllipse(b, m, m, d.Width - 1 - 2 * m, d.Height - 1 - 2 * m);
+        };
+        parent.Controls.Add(d); return d;
+    }
 
+    // ---------------- Aufbau ----------------
     void Build()
     {
+        SuspendLayout();
+        Controls.Clear();
+        tips?.Dispose(); tips = new ToolTip();
+        full = new Panel { Left = 0, Top = 0, Width = S(FW), Height = S(FH), BackColor = cBg };
+        mini = new Panel { Left = 0, Top = 0, Width = S(MW), Height = S(MH), BackColor = cBg, Visible = false };
+        Controls.Add(full); Controls.Add(mini);
+
         // Kopf
-        var logo = new PictureBox { Left = S(18), Top = S(16), Width = S(36), Height = S(36), SizeMode = PictureBoxSizeMode.Zoom, BackColor = cBg };
+        var logo = new PictureBox { Left = S(16), Top = S(16), Width = S(34), Height = S(34), SizeMode = PictureBoxSizeMode.Zoom, BackColor = cBg };
         if (Icon != null) logo.Image = new Icon(Icon, 64, 64).ToBitmap();
-        Controls.Add(logo);
-        var t1 = L(this, "CARGO", 62, 15, cText, 14f, true);
-        L(this, "DECK", 62 + (int)(t1.PreferredWidth / k), 15, cAccent, 14f, true);
-        L(this, "Scanner für Handelsterminals", 64, 40, cMuted, 9f);
+        full.Controls.Add(logo);
+        var t1 = L(full, "CARGO", 58, 13, cText, 14.5f, true);
+        L(full, "DECK", 58 + (int)(t1.PreferredWidth / k), 13, cAccent, 14.5f, true);
+        L(full, T("subtitle"), 60, 38, cMuted, 8.75f);
+        langSeg = new Seg { Left = S(252), Top = S(18), Width = S(84), Height = S(30), Items = new[] { "DE", "EN" }, Font = new Font("Segoe UI", 9f), ForeColor = cText, Fill = cPanel, Line = cLine, Accent = cAccent, Muted = cMuted };
+        langSeg.Selected = Lang.En ? 1 : 0;
+        langSeg.Changed += (s, e) => SwitchLang(langSeg.Selected == 1);
+        full.Controls.Add(langSeg);
+        bPin = Btn(full, "", 344, 18, 40, 30, false, "", 11f);
+        tips.SetToolTip(bPin, T("pin"));
+        bPin.Click += (s, e) => ApplyPin(true, true);
 
-        // Status
-        var ps = Card(68, 52, null);
-        dot = new Panel { Left = S(16), Top = S(20), Width = S(12), Height = S(12), BackColor = cPanel };
-        dot.Paint += (s, e) => { e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; using var b = new SolidBrush((Color)dot.Tag); e.Graphics.FillEllipse(b, 0, 0, dot.Width - 1, dot.Height - 1); };
-        dot.Tag = cMuted; ps.Controls.Add(dot);
-        lState = L(ps, "Gestoppt", 36, 14, cText, 11f, true, 420, 26);
+        // Reiter
+        nav = new Seg { Left = S(16), Top = S(64), Width = S(368), Height = S(40), Items = new[] { T("nav_scan"), T("nav_set"), T("nav_help") }, Font = new Font("Segoe UI", 10f), ForeColor = cText, Fill = cPanel, Line = cLine, Accent = cAccent, Muted = cMuted };
+        full.Controls.Add(nav);
+        pgScan = new Panel { Left = S(16), Top = S(116), Width = S(368), Height = S(FH - 116 - 12), BackColor = cBg };
+        pgSet = new Panel { Left = S(16), Top = S(116), Width = S(368), Height = S(FH - 116 - 12), BackColor = cBg, AutoScroll = true, Visible = false };
+        pgHelp = new Panel { Left = S(8), Top = S(116), Width = S(384), Height = S(FH - 116 - 12), BackColor = cBg, AutoScroll = true, Visible = false };
+        full.Controls.Add(pgScan); full.Controls.Add(pgSet); full.Controls.Add(pgHelp);
+        Dark(pgSet); Dark(pgHelp);
+        nav.Changed += (s, e) => ShowPage(nav.Selected);
 
-        // Verbindung
-        var pv = Card(132, 158, "Verbindung");
-        L(pv, "Adresse der Seite", 16, 36, cMuted, 9f);
-        tUrl = T(pv, 16, 56, 436);
-        L(pv, "Kopplungscode", 16, 94, cMuted, 9f);
-        tCode = T(pv, 16, 114, 190, true); tCode.CharacterCasing = CharacterCasing.Upper; tCode.MaxLength = 12;
-        L(pv, "Steht auf der Seite unter Einstellungen, PC Scanner", 218, 114, cMuted, 8.5f, false, 236, 34);
+        BuildScan(); BuildSettings(); BuildHelp(); BuildMini();
+        ShowPage(page);
+        ResumeLayout();
+    }
 
-        // Modus
-        var pm = Card(302, 116, "Wann scannen");
-        rHot = R(pm, "Nur wenn ich die Taste drücke", 16, 36);
-        rAuto = R(pm, "Automatisch alle", 16, 66);
-        nInt = new NumericUpDown { Left = S(150), Top = S(64), Width = S(56), Minimum = 3, Maximum = 60, Value = 5, BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle };
-        pm.Controls.Add(nInt);
-        L(pm, "Sekunden", 212, 67, cText);
-        L(pm, "Sendet nur, wenn wirklich ein Terminal zu sehen ist", 34, 90, cMuted, 8.5f);
+    void BuildScan()
+    {
+        var p = pgScan;
+        var st = Card(p, 0, 94, null);
+        dot = Dot(st, 14, 16, 22);
+        lState = L(st, stateTitle, 44, 13, cText, 13f, true, 310, 28);
+        lStateSub = L(st, stateSub, 45, 44, cMuted, 9.25f, false, 310, 40);
 
-        // Tasten
-        var pk = Card(430, 104, "Tasten · anklicken und neue Taste drücken");
-        L(pk, "Scannen", 16, 42, cText);
-        L(pk, "Linke Strg +", 164, 42, cMuted);
-        kScan = KB(pk, 250, 36);
-        L(pk, "Automatik an und aus", 16, 74, cText);
-        L(pk, "Linke Strg +", 164, 74, cMuted);
-        kAuto = KB(pk, 250, 68);
-        bSave = new Button { Text = "Speichern\nNeustart", Left = S(358), Top = S(36), Width = S(96), Height = S(58), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9f, FontStyle.Bold), Cursor = Cursors.Hand, UseVisualStyleBackColor = false };
-        StyleButton(bSave, false); pk.Controls.Add(bSave);
-        bSave.Click += (s, e) => SaveAndRestart();
+        bStart = Btn(p, running ? T("stop") : T("start"), 0, 106, 368, 54, !running, running ? "  " : "  ", 12f);
+        bNow = Btn(p, T("scan_now"), 0, 170, 368, 44, false, "  ", 10.5f);
 
-        // Optionen
-        var po = Card(546, 110, "Optionen");
-        cSound = Tg(po, "Leise Töne", 16, 38);
-        cNotify = Tg(po, "Benachrichtigungen", 236, 38);
-        cAutostart = Tg(po, "Mit Windows starten", 16, 72);
+        var am = Card(p, 226, 62, null);
+        cAutoMode = Tg(am, T("auto"), 16, 17);
+        L(am, T("every"), 188, 21, cMuted, 9.5f);
+        nInt = new NumericUpDown { Left = S(222), Top = S(18), Width = S(52), Minimum = 3, Maximum = 60, Value = 5, BackColor = cPanel2, ForeColor = cText, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 10f) };
+        am.Controls.Add(nInt);
+        L(am, T("seconds"), 280, 21, cMuted, 9.5f);
 
-        // Knöpfe
-        bStart = B("Starten", 16, 670, 228, 46, true);
-        bNow = B("Jetzt scannen", 256, 670, 228, 46, false);
+        var ls = Card(p, 300, 96, T("last_title"));
+        lLast = L(ls, lastTitle, 16, 34, cText, 12f, true, 336, 26);
+        lLastSub = L(ls, lastSub, 16, 62, cMuted, 9f, false, 336, 30);
 
-        // Verlauf
-        log = new ListBox { Left = S(16), Top = S(728), Width = S(468), Height = S(84), BackColor = cPanel, ForeColor = cMuted, BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false, Font = new Font("Segoe UI", 8.75f), SelectionMode = SelectionMode.None };
-        Controls.Add(log);
+        var lg = Card(p, 408, FH - 116 - 12 - 408, T("log_title"));
+        log = new ListBox { Left = S(12), Top = S(34), Width = S(344), Height = lg.Height - S(44), BackColor = cPanel, ForeColor = cMuted, BorderStyle = BorderStyle.None, IntegralHeight = false, Font = new Font("Segoe UI", 9f), SelectionMode = SelectionMode.None };
+        foreach (var l in logLines) log.Items.Add(l);
+        Dark(log);
+        lg.Controls.Add(log);
 
         bStart.Click += (s, e) => { if (running) StopScanner(); else StartScanner(); };
         bNow.Click += async (s, e) =>
         {
             if (!running) StartScanner();
             if (!running) return;
-            WindowState = FormWindowState.Minimized;
+            if (!cfg.Pinned) WindowState = FormWindowState.Minimized;
             await Task.Delay(700);
             await Scan(false);
         };
-        rAuto.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (running) ShowRunning(); if (miAuto != null) miAuto.Checked = rAuto.Checked; };
+        cAutoMode.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (running) ShowRunning(); SyncAuto(); };
         nInt.ValueChanged += (s, e) => { if (!loading) ReadForm(); if (running) ShowRunning(); };
+    }
+
+    void BuildSettings()
+    {
+        var p = pgSet;
+        var pv = Card(p, 0, 176, T("conn_title"));
+        L(pv, T("url"), 16, 36, cMuted, 9f);
+        tUrl = Tb(pv, 16, 56, 336);
+        L(pv, T("code"), 16, 96, cMuted, 9f);
+        tCode = Tb(pv, 16, 116, 164, true); tCode.CharacterCasing = CharacterCasing.Upper; tCode.MaxLength = 12;
+        Wrap(pv, T("code_hint"), 190, 114, 164, cMuted, 8.5f);
+
+        var pk = Card(p, 188, 186, T("keys_title"));
+        L(pk, T("keys_hint"), 16, 30, cDim, 8.5f);
+        L(pk, T("key_scan"), 16, 64, cText, 10f);
+        L(pk, T("ctrl"), 168, 64, cMuted, 9.5f);
+        kScan = KB(pk, 256, 58);
+        L(pk, T("key_auto"), 16, 102, cText, 10f, false, 150, 22);
+        L(pk, T("ctrl"), 168, 102, cMuted, 9.5f);
+        kAuto = KB(pk, 256, 96);
+        bSave = Btn(pk, T("save_restart"), 16, 138, 336, 36, false, "  ", 10f);
+        bSave.Click += (s, e) => SaveAndRestart();
+
+        var po = Card(p, 386, 176, T("opt_title"));
+        cSound = Tg(po, T("opt_sound"), 16, 38);
+        cNotify = Tg(po, T("opt_notify"), 16, 70);
+        cAutostart = Tg(po, T("opt_autostart"), 16, 102);
+        cTop = Tg(po, T("opt_top"), 16, 134);
+
+        var pe = Card(p, 574, 72, T("engine_title"));
+        lEngine = L(pe, T("engine_load"), 16, 34, cMuted, 9f, false, 336, 34);
+        ShowEngine();
+
         cSound.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (cfg.Sounds) Sound.Play(Sound.On); };
         cNotify.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
         cAutostart.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
+        cTop.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (!cfg.Pinned) TopMost = cfg.TopMost; };
         tUrl.Leave += (s, e) => { if (!loading) ReadForm(); };
         tCode.TextChanged += (s, e) =>
         {
             var clean = Regex.Replace(tCode.Text.ToUpperInvariant(), "[^A-Z2-9]", "");
             if (clean != tCode.Text) { tCode.Text = clean; tCode.SelectionStart = clean.Length; }
         };
+        tCode.Leave += (s, e) => { if (!loading) ReadForm(); };
+    }
+
+    void BuildHelp()
+    {
+        var p = pgHelp;
+        int y = 0, x = 8, w = 352;
+        L(p, T("help_title"), x, y, cText, 13f, true); y += 34;
+        var steps = new[] { ("h1_t", T("h1")), ("h2_t", T("h2")), ("h3_t", T("h3")), ("h4_t", T("h4", KeyNames.Name(cfg.ScanVk))), ("h5_t", T("h5")) };
+        for (int i = 0; i < steps.Length; i++)
+        {
+            var c = Card(p, y, 10, null, x, w);
+            var num = new Label { Text = (i + 1).ToString(), Left = S(14), Top = S(14), Width = S(28), Height = S(28), TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 11f, FontStyle.Bold), ForeColor = cDark, BackColor = cPanel };
+            num.Paint += (s, e) =>
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; e.Graphics.Clear(cPanel);
+                using var b = new SolidBrush(cAccent); e.Graphics.FillEllipse(b, 0, 0, num.Width - 1, num.Height - 1);
+                TextRenderer.DrawText(e.Graphics, num.Text, num.Font, new Rectangle(0, 0, num.Width, num.Height), cDark, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            };
+            c.Controls.Add(num);
+            int yy = Wrap(c, T(steps[i].Item1), 54, 14, w - 70, cText, 10.5f, true);
+            yy = Wrap(c, steps[i].Item2, 54, yy + 2, w - 70, cMuted, 9.25f);
+            c.Height = S(Math.Max(yy + 14, 58));
+            y += (int)Math.Ceiling(c.Height / k) + 10;
+        }
+        y += 6;
+        var tc = Card(p, y, 10, T("tips_title"), x, w);
+        int ty = 36;
+        foreach (var tk in new[] { "tip1", "tip2", "tip3", "tip4" })
+        {
+            L(tc, "•", 16, ty - 1, cAccent, 11f, true);
+            ty = Wrap(tc, T(tk), 32, ty, w - 48, cMuted, 9.25f) + 8;
+        }
+        tc.Height = S(ty + 6);
+        y += (int)Math.Ceiling(tc.Height / k) + 12;
+        var bo = Btn(p, T("open_site"), x, y, w, 40, true, "  ", 10.5f);
+        bo.Click += (s, e) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(string.IsNullOrWhiteSpace(cfg.Url) ? "https://cargodeck.onrender.com" : cfg.Url) { UseShellExecute = true }); } catch { } };
+        L(p, " ", x, y + 52, cBg, 6f);   // Platz unten beim Scrollen
+    }
+
+    // Kleines Fenster, bleibt im Vordergrund wie der Windows Rechner
+    void BuildMini()
+    {
+        var p = mini;
+        miniDot = Dot(p, 12, 13, 20);
+        lMiniState = L(p, stateTitle, 38, 11, cText, 11.5f, true, 200, 24);
+        bUnpin = Btn(p, "", 250, 8, 40, 30, false, "", 11f);
+        tips.SetToolTip(bUnpin, T("unpin"));
+        bUnpin.Click += (s, e) => ApplyPin(false, true);
+        lMiniSub = L(p, stateSub, 39, 36, cMuted, 8.75f, false, 250, 34);
+        bMiniScan = Btn(p, T("scan_short"), 12, 76, 134, 42, true, "  ", 10.5f);
+        bMiniAuto = Btn(p, T("auto_short"), 154, 76, 134, 42, false, "  ", 10.5f);
+        lMiniLast = L(p, lastTitle, 12, 128, cMuted, 8.75f, false, 276, 36);
+        bMiniScan.Click += async (s, e) => { if (!running) StartScanner(); if (running) await Scan(false); };
+        bMiniAuto.Click += (s, e) => { if (!running) StartScanner(); if (!running) return; cAutoMode.Checked = !cAutoMode.Checked; };
+    }
+
+    public void DebugPage(int i) { if (i == 9) ApplyPin(true, true); else ShowPage(i); }
+    void ShowPage(int i)
+    {
+        page = i;
+        if (nav != null && nav.Selected != i) nav.Selected = i;
+        pgScan.Visible = i == 0; pgSet.Visible = i == 1; pgHelp.Visible = i == 2;
+    }
+
+    void ShowEngine()
+    {
+        if (lEngine == null || lEngine.IsDisposed) return;
+        var p = PaddleOcr.Get();
+        lEngine.Text = p != null ? T("engine_paddle") : PaddleOcr.LoadError != null ? T("engine_win", PaddleOcr.LoadError) : T("engine_load");
+        lEngine.ForeColor = p != null ? cGood : cMuted;
+    }
+
+    void SyncAuto()
+    {
+        if (miAuto != null) miAuto.Checked = cAutoMode.Checked;
+        if (bMiniAuto != null) { bMiniAuto.Primary = cAutoMode.Checked; bMiniAuto.Invalidate(); }
+    }
+
+    // Sprache umschalten: alles neu aufbauen, Einstellungen und Verlauf bleiben
+    void SwitchLang(bool en)
+    {
+        if (Lang.En == en) return;
+        ReadForm();
+        Lang.En = en; cfg.Lang = en ? "en" : "de"; cfg.Save();
+        if (running) { var (t, s) = RunningText(); stateTitle = t; stateSub = s; }
+        else { stateTitle = T("stopped"); stateSub = T("stopped_sub"); }
+        if (lastTitle == (en ? "Noch nichts gescannt" : "Nothing scanned yet")) lastTitle = T("last_none");
+        Build(); LoadForm(); SetupTray();
+        ApplyPin(false);
+    }
+
+    // Kleines Fenster im Vordergrund an oder aus
+    void ApplyPin(bool toggle, bool fromUser = false)
+    {
+        if (toggle || fromUser) { if (fromUser) cfg.Pinned = !cfg.Pinned; }
+        if (cfg.Pinned)
+        {
+            full.Visible = false; mini.Visible = true;
+            ClientSize = new Size(S(MW), S(MH));
+            TopMost = true;
+            var wa = Screen.FromControl(this).WorkingArea;
+            if (cfg.PinX >= 0 && cfg.PinY >= 0 && Screen.AllScreens.Any(sc => sc.WorkingArea.Contains(cfg.PinX + 20, cfg.PinY + 20))) Location = new Point(cfg.PinX, cfg.PinY);
+            else if (fromUser) Location = new Point(wa.Right - Width - S(16), wa.Bottom - Height - S(16));
+        }
+        else
+        {
+            mini.Visible = false; full.Visible = true;
+            ClientSize = new Size(S(FW), S(FH));
+            TopMost = cfg.TopMost;
+            if (fromUser) { var wa = Screen.FromControl(this).WorkingArea; Location = new Point(Math.Max(wa.Left, Math.Min(Left, wa.Right - Width)), Math.Max(wa.Top, Math.Min(Top, wa.Bottom - Height))); }
+        }
+        if (fromUser) cfg.Save();
+    }
+
+    protected override void OnMove(EventArgs e)
+    {
+        base.OnMove(e);
+        if (cfg != null && cfg.Pinned && WindowState == FormWindowState.Normal && Visible) { cfg.PinX = Left; cfg.PinY = Top; }
     }
 
     void LoadForm()
     {
         loading = true;
         tUrl.Text = cfg.Url; tCode.Text = cfg.Code;
-        rAuto.Checked = cfg.Mode == "auto"; rHot.Checked = !rAuto.Checked;
+        cAutoMode.Checked = cfg.Mode == "auto";
         nInt.Value = Math.Clamp(cfg.Interval, 3, 60);
         kScan.Vk = cfg.ScanVk; kAuto.Vk = cfg.AutoVk;
-        cSound.Checked = cfg.Sounds; cNotify.Checked = cfg.Notify; cAutostart.Checked = cfg.Autostart;
+        cSound.Checked = cfg.Sounds; cNotify.Checked = cfg.Notify; cAutostart.Checked = cfg.Autostart; cTop.Checked = cfg.TopMost;
+        if (running) foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }
         loading = false;
+        SyncAuto();
     }
 
     void ReadForm()
     {
         cfg.Url = tUrl.Text.Trim().TrimEnd('/');
         cfg.Code = tCode.Text.Trim().ToUpperInvariant();
-        cfg.Mode = rAuto.Checked ? "auto" : "hotkey";
+        cfg.Mode = cAutoMode.Checked ? "auto" : "hotkey";
         cfg.Interval = (int)nInt.Value;
         if (kScan.Vk > 0) { cfg.ScanVk = kScan.Vk; cfg.ScanKey = KeyNames.Name(kScan.Vk); }
         if (kAuto.Vk > 0) { cfg.AutoVk = kAuto.Vk; cfg.AutoKey = KeyNames.Name(kAuto.Vk); }
-        cfg.Sounds = cSound.Checked; cfg.Notify = cNotify.Checked; cfg.Autostart = cAutostart.Checked;
+        cfg.Sounds = cSound.Checked; cfg.Notify = cNotify.Checked; cfg.Autostart = cAutostart.Checked; cfg.TopMost = cTop.Checked;
         cfg.Save();
     }
 
@@ -235,14 +429,14 @@ class MainForm : Form
     void SetupTray()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Öffnen", null, (s, e) => ShowWindow());
-        menu.Items.Add("Jetzt scannen", null, async (s, e) => { if (!running) StartScanner(); if (running) await Scan(false); });
-        miAuto = new ToolStripMenuItem("Automatik", null, (s, e) => { if (rAuto.Checked) rHot.Checked = true; else rAuto.Checked = true; }) { Checked = rAuto.Checked };
+        menu.Items.Add(T("tray_open"), null, (s, e) => ShowWindow());
+        menu.Items.Add(T("scan_now"), null, async (s, e) => { if (!running) StartScanner(); if (running) await Scan(false); });
+        miAuto = new ToolStripMenuItem(T("auto"), null, (s, e) => { cAutoMode.Checked = !cAutoMode.Checked; }) { Checked = cAutoMode.Checked };
         menu.Items.Add(miAuto);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Beenden", null, (s, e) => Close());
-        tray = new NotifyIcon { Icon = Icon, Text = "Cargo Deck Scanner", Visible = true, ContextMenuStrip = menu };
-        tray.DoubleClick += (s, e) => ShowWindow();
+        menu.Items.Add(T("tray_quit"), null, (s, e) => Close());
+        if (tray == null) { tray = new NotifyIcon { Icon = Icon, Text = "Cargo Deck Scanner", Visible = true }; tray.DoubleClick += (s, e) => ShowWindow(); }
+        var old = tray.ContextMenuStrip; tray.ContextMenuStrip = menu; old?.Dispose();
     }
 
     void ShowWindow() { Show(); WindowState = FormWindowState.Normal; ShowInTaskbar = true; Activate(); }
@@ -256,12 +450,13 @@ class MainForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        Log("Bereit");
+        Log(T("ready"));
         if ((startInTray || startRun || cfg.Autostart) && CodeRe.IsMatch(cfg.Code) && cfg.Url.StartsWith("http"))
         {
             StartScanner();
-            if (startInTray) { WindowState = FormWindowState.Minimized; }
+            if (startInTray && !cfg.Pinned) { WindowState = FormWindowState.Minimized; }
         }
+        else if (!CodeRe.IsMatch(cfg.Code)) ShowPage(2);   // noch nicht eingerichtet, dann gleich die Anleitung
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -276,7 +471,7 @@ class MainForm : Form
         try
         {
             ReadForm(); cfg.Save();
-            Log("Gespeichert, starte neu");
+            Log(T("saved_restart"));
             var args = running ? "--restart --run" : "--restart";
             // Aus dem Store über den App Alias neu starten, sonst direkt die exe
             if (Packaged.IsPackaged) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Packaged.Alias, args) { UseShellExecute = true });
@@ -284,14 +479,30 @@ class MainForm : Form
             tray.Visible = false;
             Application.Exit();
         }
-        catch (Exception ex) { Log("Speichern ging nicht " + ex.Message); }
+        catch (Exception ex) { Log(T("save_fail", ex.Message)); }
     }
 
     // ---------------- Zustand ----------------
-    void SetState(string text, Color col) { lState.Text = text; dot.Tag = col; dot.Invalidate(); }
+    void SetState(string title, string sub, Color col)
+    {
+        stateTitle = title; stateSub = sub ?? ""; stateCol = col;
+        foreach (var l in new[] { lState, lMiniState }) if (l != null) l.Text = title;
+        foreach (var l in new[] { lStateSub, lMiniSub }) if (l != null) l.Text = stateSub;
+        dot?.Invalidate(); miniDot?.Invalidate();
+    }
+    void SetLast(string title, string sub)
+    {
+        lastTitle = title; lastSub = sub ?? "";
+        if (lLast != null) lLast.Text = title;
+        if (lLastSub != null) lLastSub.Text = lastSub;
+        if (lMiniLast != null) lMiniLast.Text = title;
+    }
     void Log(string text)
     {
-        log.Items.Insert(0, DateTime.Now.ToString("HH:mm:ss") + "   " + text);
+        var line = DateTime.Now.ToString("HH:mm:ss") + "   " + text;
+        logLines.Insert(0, line); while (logLines.Count > 60) logLines.RemoveAt(logLines.Count - 1);
+        if (log == null || log.IsDisposed) return;
+        log.Items.Insert(0, line);
         while (log.Items.Count > 60) log.Items.RemoveAt(log.Items.Count - 1);
     }
     void Notify(string text)
@@ -303,30 +514,26 @@ class MainForm : Form
     {
         if (cfg.Sounds) Sound.Play(kind);
     }
-    void ShowRunning()
-    {
-        SetState(cfg.Mode == "auto" ? $"Läuft, automatisch alle {cfg.Interval} Sekunden" : $"Läuft, Linke Strg + {cfg.ScanKey} scannt", cGood);
-    }
+    (string, string) RunningText() => cfg.Mode == "auto" ? (T("run_auto"), T("run_auto_sub", cfg.Interval)) : (T("run_hot"), T("run_hot_sub", cfg.ScanKey));
+    void ShowRunning() { var (t, s) = RunningText(); SetState(t, s, cGood); }
 
     void StartScanner()
     {
         ReadForm();
-        if (!Regex.IsMatch(cfg.Url, "^https?://[^/]+"))
-        { MessageBox.Show(this, "Bitte die Adresse der Cargo Deck Seite eintragen, zum Beispiel https://cargodeck.onrender.com", "Cargo Deck Scanner"); return; }
-        if (!CodeRe.IsMatch(cfg.Code))
-        { MessageBox.Show(this, "Der Kopplungscode hat 12 Zeichen. Du findest ihn auf der Seite unter Einstellungen, PC Scanner.", "Cargo Deck Scanner"); return; }
+        if (!Regex.IsMatch(cfg.Url, "^https?://[^/]+")) { ShowPage(1); MessageBox.Show(this, T("bad_url"), "Cargo Deck Scanner"); return; }
+        if (!CodeRe.IsMatch(cfg.Code)) { ShowPage(1); MessageBox.Show(this, T("bad_code"), "Cargo Deck Scanner"); tCode.Focus(); return; }
         running = true; lastPrint = ""; nextAuto = DateTime.Now; lastPing = DateTime.MinValue;
-        bStart.Text = "Stoppen"; StyleButton(bStart, false);
+        bStart.Text = T("stop"); bStart.Icon = "  "; bStart.Primary = false; bStart.Invalidate();
         foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }
-        ShowRunning(); Log($"Gestartet, Linke Strg + {cfg.ScanKey} scannt"); Beep(Sound.On);
+        ShowRunning(); Log(T("started", cfg.ScanKey)); Beep(Sound.On);
     }
 
     void StopScanner()
     {
         running = false;
-        bStart.Text = "Starten"; StyleButton(bStart, true);
+        bStart.Text = T("start"); bStart.Icon = "  "; bStart.Primary = true; bStart.Invalidate();
         foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = false; t.ForeColor = cText; t.BackColor = cPanel2; }
-        SetState("Gestoppt", cMuted); Log("Gestoppt");
+        SetState(T("stopped"), T("stopped_sub"), cDim); Log(T("stopped_log"));
     }
 
     // ---------------- Tasten und Takt ----------------
@@ -346,14 +553,14 @@ class MainForm : Form
             wasScan = scan; wasAuto = auto;
             if (autoEdge)
             {
-                if (rAuto.Checked) { rHot.Checked = true; Log("Automatik aus"); Beep(Sound.Off); Notify("Automatik aus"); }
-                else { rAuto.Checked = true; Log("Automatik an"); Beep(Sound.On); Notify($"Automatik an, alle {cfg.Interval} Sekunden"); }
+                if (cAutoMode.Checked) { cAutoMode.Checked = false; Log(T("auto_off")); Beep(Sound.Off); Notify(T("auto_off")); }
+                else { cAutoMode.Checked = true; Log(T("auto_on", cfg.Interval)); Beep(Sound.On); Notify(T("auto_on", cfg.Interval)); }
             }
             if (DateTime.Now - lastPing > TimeSpan.FromSeconds(30)) { lastPing = DateTime.Now; _ = Ping(); }
             if (scanEdge) await Scan(false);
-            else if (rAuto.Checked && !busy && DateTime.Now >= nextAuto) { nextAuto = DateTime.Now.AddSeconds(cfg.Interval); await Scan(true); }
+            else if (cAutoMode.Checked && !busy && DateTime.Now >= nextAuto) { nextAuto = DateTime.Now.AddSeconds(cfg.Interval); await Scan(true); }
         }
-        catch (Exception ex) { Log("Fehler " + ex.Message); busy = false; }
+        catch (Exception ex) { Log(T("err", ex.Message)); busy = false; }
     }
 
     async Task Ping()
@@ -409,7 +616,7 @@ class MainForm : Form
 
     async Task Scan(bool auto)
     {
-        if (busy) { if (!auto) Log("Noch beschäftigt, einen Moment"); return; }
+        if (busy) { if (!auto) Log(T("busy")); return; }
         busy = true;
         try
         {
@@ -420,7 +627,7 @@ class MainForm : Form
                 if (pr == lastPrint) return;
                 lastPrint = pr;
             }
-            if (!auto) SetState("Lese Terminal…", cWarn);
+            if (!auto) SetState(T("reading"), stateSub, cWarn);
             // Zwei weitere Bilder kurz danach, das Terminal flimmert im Spiel leicht. Die Preise werden auf allen gelesen.
             var shots = new List<Bitmap> { bmp };
             var fg = GetForegroundWindow();
@@ -433,7 +640,7 @@ class MainForm : Form
             var img = Jpeg64(bmp);
             JsonObject ocr;
             try { ocr = await Task.Run(() => Ocr.Run(shots)); }
-            catch (Exception ex) { Log("Texterkennung Fehler " + ex.Message); if (!auto) SetState("Texterkennung ging nicht", cBad); return; }
+            catch (Exception ex) { Log(T("ocr_err", ex.Message)); if (!auto) SetState(T("ocr_fail"), ex.Message, cBad); return; }
             finally { foreach (var s in shots.Skip(1)) s.Dispose(); }
 
             if (auto)
@@ -453,8 +660,8 @@ class MainForm : Form
             }
             catch (Exception ex)
             {
-                Log("Senden fehlgeschlagen " + ex.Message); SetState("Seite nicht erreichbar, Adresse prüfen", cBad);
-                if (!auto) { Beep(Sound.Error); Notify("Senden fehlgeschlagen, ist die Adresse richtig?"); }
+                Log(T("send_fail", ex.Message)); SetState(T("unreach"), cfg.Url, cBad);
+                if (!auto) { Beep(Sound.Error); Notify(T("send_fail_n")); }
                 return;
             }
 
@@ -463,22 +670,23 @@ class MainForm : Form
             if (rows > 0)
             {
                 string st = ""; try { st = ((string)r["station"] ?? "").Split(" > ").Last(); } catch { }
-                Log($"{rows} Preise erkannt {st}".Trim());
-                SetState($"Letzter Scan {DateTime.Now:HH:mm}, {rows} Preise", cGood);
-                Beep(Sound.Success); Notify($"{rows} Preise erkannt {st}, schau auf die Seite".Replace("  ", " "));
+                Log(T("rows_ok", rows, st).Trim());
+                ShowRunning();
+                SetLast(T("last_ok", rows, DateTime.Now.ToString("HH:mm")) + (st.Length > 0 ? ", " + st : ""), T("last_look"));
+                Beep(Sound.Success); Notify(T("rows_notify", rows, st).Replace("  ", " "));
             }
             else if (!auto)
             {
-                string n = "Kein Terminal erkannt";
+                string n = T("no_term");
                 try { n = (string)r?["error"] ?? (string)r?["note"] ?? n; } catch { }
-                if (!resp.IsSuccessStatusCode && r?["error"] == null) n = $"Seite antwortet mit Fehler {(int)resp.StatusCode}";
-                Log(n); SetState(n, cWarn); Beep(Sound.Error);
+                if (!resp.IsSuccessStatusCode && r?["error"] == null) n = T("http_err", (int)resp.StatusCode);
+                Log(n); SetState(n, RunningText().Item2, cWarn); Beep(Sound.Error);
             }
         }
         finally
         {
             busy = false;
-            if (running && !auto && lState.Text.StartsWith("Lese")) ShowRunning();
+            if (running && !auto && stateTitle == T("reading")) ShowRunning();
         }
     }
 }

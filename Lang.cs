@@ -1,0 +1,111 @@
+namespace CargoDeckScanner;
+
+// Alle Texte der App auf Deutsch und Englisch. Umschalten oben rechts in der App.
+static class Lang
+{
+    public static bool En;
+
+    public static string T(string key, params object[] a)
+    {
+        var s = Texts.TryGetValue(key, out var v) ? (En ? v.en : v.de) : key;
+        return a.Length > 0 ? string.Format(s, a) : s;
+    }
+
+    static readonly Dictionary<string, (string de, string en)> Texts = new()
+    {
+        ["subtitle"] = ("Scanner für Handelsterminals", "Trade terminal scanner"),
+        ["nav_scan"] = ("Scanner", "Scanner"),
+        ["nav_set"] = ("Einstellungen", "Settings"),
+        ["nav_help"] = ("Anleitung", "Guide"),
+        ["pin"] = ("Im Vordergrund halten, kleines Fenster", "Keep on top, small window"),
+        ["unpin"] = ("Zurück zum großen Fenster", "Back to the full window"),
+
+        ["stopped"] = ("Gestoppt", "Stopped"),
+        ["stopped_sub"] = ("Drück auf Starten, dann wartet der Scanner auf deine Taste.", "Press Start, then the scanner waits for your key."),
+        ["run_hot"] = ("Läuft", "Running"),
+        ["run_hot_sub"] = ("Linke Strg + {0} am Terminal im Spiel drücken", "Press Left Ctrl + {0} at the terminal in game"),
+        ["run_auto"] = ("Läuft automatisch", "Running automatically"),
+        ["run_auto_sub"] = ("Alle {0} Sekunden, nur wenn ein Terminal zu sehen ist", "Every {0} seconds, only when a terminal is visible"),
+        ["reading"] = ("Lese Terminal…", "Reading terminal…"),
+        ["start"] = ("Starten", "Start"),
+        ["stop"] = ("Stoppen", "Stop"),
+        ["scan_now"] = ("Jetzt scannen", "Scan now"),
+        ["scan_short"] = ("Scannen", "Scan"),
+        ["auto"] = ("Automatik", "Auto mode"),
+        ["auto_short"] = ("Auto", "Auto"),
+        ["every"] = ("alle", "every"),
+        ["seconds"] = ("Sekunden", "seconds"),
+        ["last_title"] = ("Letzter Scan", "Last scan"),
+        ["last_none"] = ("Noch nichts gescannt", "Nothing scanned yet"),
+        ["last_ok"] = ("{0} Preise um {1}", "{0} prices at {1}"),
+        ["last_look"] = ("Schau auf die Website, dort prüfen und übernehmen.", "Check the website, review and apply them there."),
+        ["log_title"] = ("Verlauf", "History"),
+
+        ["conn_title"] = ("Verbindung", "Connection"),
+        ["url"] = ("Adresse der Website", "Website address"),
+        ["code"] = ("Kopplungscode", "Pairing code"),
+        ["code_hint"] = ("Steht auf der Website unter Einstellungen, PC Scanner.", "Shown on the website under Settings, PC scanner."),
+        ["keys_title"] = ("Tasten", "Keys"),
+        ["keys_hint"] = ("Feld anklicken und neue Taste drücken", "Click a field and press the new key"),
+        ["key_scan"] = ("Scannen", "Scan"),
+        ["key_auto"] = ("Automatik an und aus", "Auto mode on and off"),
+        ["ctrl"] = ("Linke Strg +", "Left Ctrl +"),
+        ["save_restart"] = ("Speichern und neu starten", "Save and restart"),
+        ["opt_title"] = ("Optionen", "Options"),
+        ["opt_sound"] = ("Leise Töne", "Soft sounds"),
+        ["opt_notify"] = ("Benachrichtigungen", "Notifications"),
+        ["opt_autostart"] = ("Mit Windows starten", "Start with Windows"),
+        ["opt_top"] = ("Immer im Vordergrund", "Always on top"),
+        ["lang_title"] = ("Sprache", "Language"),
+        ["engine_title"] = ("Texterkennung", "Text recognition"),
+        ["engine_paddle"] = ("PaddleOCR, die gleiche Technik wie auf der Website", "PaddleOCR, the same technology as the website"),
+        ["engine_win"] = ("Windows Texterkennung (PaddleOCR ging nicht: {0})", "Windows text recognition (PaddleOCR failed: {0})"),
+        ["engine_load"] = ("wird geladen…", "loading…"),
+
+        ["help_title"] = ("So funktioniert es", "How it works"),
+        ["h1_t"] = ("Code holen", "Get the code"),
+        ["h1"] = ("Öffne Cargo Deck im Browser, geh auf Einstellungen und kopiere den Code unter PC Scanner.", "Open Cargo Deck in your browser, go to Settings and copy the code under PC scanner."),
+        ["h2_t"] = ("Code eintragen", "Enter the code"),
+        ["h2"] = ("Hier unter Einstellungen den Code einfügen. Die Adresse der Website stimmt schon.", "Paste the code here under Settings. The website address is already correct."),
+        ["h3_t"] = ("Starten", "Start"),
+        ["h3"] = ("Auf Starten drücken. Der Punkt oben wird grün, der Scanner wartet dann im Hintergrund.", "Press Start. The dot turns green and the scanner waits in the background."),
+        ["h4_t"] = ("Im Spiel scannen", "Scan in game"),
+        ["h4"] = ("Am Handelsterminal Linke Strg + {0} drücken. Oder Automatik einschalten, dann liest er von selbst, sobald ein Terminal zu sehen ist.", "At the trade terminal press Left Ctrl + {0}. Or turn on auto mode, then it reads by itself whenever a terminal is visible."),
+        ["h5_t"] = ("Auf der Website übernehmen", "Apply on the website"),
+        ["h5"] = ("Der Scan erscheint auf der Website. Kurz prüfen und übernehmen, dann fließen die Preise in deine Routen.", "The scan shows up on the website. Check it quickly and apply it, then the prices flow into your routes."),
+        ["tips_title"] = ("Tipps", "Tips"),
+        ["tip1"] = ("Setz auf der Website deinen Standort, bei der Station auf „Ich bin hier“. Dann ist die Station sofort klar und alles geht schneller.", "Set your location on the website, click “I'm here” on the station. Then the station is clear right away and everything is faster."),
+        ["tip2"] = ("Das Terminal sollte groß und gut lesbar im Bild sein. Fenster oder randloser Vollbildmodus gehen beide.", "The terminal should be large and readable on screen. Windowed and borderless fullscreen both work."),
+        ["tip3"] = ("Mit der Nadel oben rechts bleibt ein kleines Fenster immer im Vordergrund, wie beim Windows Rechner.", "The pin at the top right keeps a small window always on top, like the Windows calculator."),
+        ["tip4"] = ("Nach dem Starten kannst du das Fenster schließen oder minimieren. Der Scanner läuft unten rechts neben der Uhr weiter.", "After starting you can close or minimize the window. The scanner keeps running at the bottom right next to the clock."),
+        ["open_site"] = ("Website öffnen", "Open website"),
+
+        ["ready"] = ("Bereit", "Ready"),
+        ["started"] = ("Gestartet, Linke Strg + {0} scannt", "Started, Left Ctrl + {0} scans"),
+        ["stopped_log"] = ("Gestoppt", "Stopped"),
+        ["busy"] = ("Noch beschäftigt, einen Moment", "Still busy, one moment"),
+        ["auto_on"] = ("Automatik an, alle {0} Sekunden", "Auto mode on, every {0} seconds"),
+        ["auto_off"] = ("Automatik aus", "Auto mode off"),
+        ["new_key"] = ("Neue Taste {0}, jetzt speichern", "New key {0}, save now"),
+        ["saved_restart"] = ("Gespeichert, starte neu", "Saved, restarting"),
+        ["save_fail"] = ("Speichern ging nicht {0}", "Saving failed {0}"),
+        ["ocr_fail"] = ("Texterkennung ging nicht", "Text recognition failed"),
+        ["ocr_err"] = ("Texterkennung Fehler {0}", "Text recognition error {0}"),
+        ["send_fail"] = ("Senden fehlgeschlagen {0}", "Sending failed {0}"),
+        ["unreach"] = ("Website nicht erreichbar, Adresse prüfen", "Website not reachable, check the address"),
+        ["send_fail_n"] = ("Senden fehlgeschlagen, ist die Adresse richtig?", "Sending failed, is the address correct?"),
+        ["rows_ok"] = ("{0} Preise erkannt {1}", "{0} prices recognized {1}"),
+        ["rows_state"] = ("Letzter Scan {0}, {1} Preise", "Last scan {0}, {1} prices"),
+        ["rows_notify"] = ("{0} Preise erkannt {1}, schau auf die Website", "{0} prices recognized {1}, check the website"),
+        ["no_term"] = ("Kein Terminal erkannt", "No terminal recognized"),
+        ["http_err"] = ("Website antwortet mit Fehler {0}", "Website answers with error {0}"),
+        ["err"] = ("Fehler {0}", "Error {0}"),
+        ["bad_url"] = ("Bitte die Adresse der Cargo Deck Website eintragen, zum Beispiel https://cargodeck.onrender.com", "Please enter the address of the Cargo Deck website, for example https://cargodeck.onrender.com"),
+        ["bad_code"] = ("Der Kopplungscode hat 12 Zeichen. Du findest ihn auf der Website unter Einstellungen, PC Scanner.", "The pairing code has 12 characters. You find it on the website under Settings, PC scanner."),
+        ["tray_open"] = ("Öffnen", "Open"),
+        ["tray_quit"] = ("Beenden", "Quit"),
+        ["already"] = ("Der Cargo Deck Scanner läuft schon. Du findest ihn unten rechts bei den Symbolen neben der Uhr.", "Cargo Deck Scanner is already running. You find it at the bottom right next to the clock."),
+        ["crash"] = ("Da ist etwas schiefgelaufen, der Scanner läuft aber weiter.", "Something went wrong, but the scanner keeps running."),
+        ["crash_log"] = ("Details stehen in %APPDATA%\\CargoDeck\\scanner-fehler.log", "Details are in %APPDATA%\\CargoDeck\\scanner-fehler.log"),
+    };
+}

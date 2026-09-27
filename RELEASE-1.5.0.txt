@@ -1,0 +1,32 @@
+Titel
+Cargo Deck Scanner 1.5.0
+
+Tag
+V1.5.0
+
+Beschreibung
+**Welche Datei?**
+- `CargoDeckScanner.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckScanner-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+**Neu in 1.5.0**
+- Neue Texterkennung PaddleOCR, die gleiche wie auf der Website. Liest auch rote Pyro Terminals, schräge Aufnahmen und kleine Auflösungen viel besser.
+- Neues Design im Stil der Website, hochkant, mit den Reitern Scanner, Einstellungen und Anleitung.
+- Anleitung direkt in der App.
+- Deutsch und Englisch, oben rechts umstellbar.
+- Nadel oben rechts, dann bleibt ein kleines Fenster immer im Vordergrund, wie beim Windows Rechner.
+- Linux: Tastenkürzel unter Wayland über das System (KDE Plasma, GNOME 48 oder neuer, Hyprland), läuft auch auf Fedora.
+
+---
+
+**Which file?**
+- `CargoDeckScanner.exe` is for **Windows** 10 and 11. Just download and run, no installation.
+- `CargoDeckScanner-linux.tar.gz` is for **Linux**. Extract it and run `./install.sh`.
+
+**New in 1.5.0**
+- New text recognition PaddleOCR, the same as on the website. Reads red Pyro terminals, angled shots and small resolutions much better.
+- New design in the style of the website, portrait, with the tabs Scanner, Settings and Guide.
+- Guide right inside the app.
+- German and English, switch at the top right.
+- Pin at the top right keeps a small window always on top, like the Windows calculator.
+- Linux: hotkeys on Wayland through the system (KDE Plasma, GNOME 48 or newer, Hyprland), works on Fedora too.
