@@ -6,7 +6,15 @@ on:
       version:
         description: "Version, vier Zahlen, die letzte immer 0, zum Beispiel 1.2.0.0"
         required: true
-        default: "1.2.0.0"
+        default: "1.6.0.0"
+      name:
+        description: "Name im Store, muss im Partner Center reserviert sein"
+        required: true
+        type: choice
+        default: "Cargo Deck Price Capture"
+        options:
+          - "Cargo Deck Price Capture"
+          - "Cargo Deck Scanner"
 
 jobs:
   msix:
@@ -38,7 +46,7 @@ jobs:
           if (-not $mf) { Write-Error "AppxManifest.xml nicht gefunden. Bitte aus dem Ordner Package hochladen."; exit 1 }
           Write-Host "Manifest:" $mf.FullName
           $m = Get-Content $mf.FullName -Raw -Encoding UTF8
-          $m = $m.Replace('__VERSION__', '${{ inputs.version }}')
+          $m = $m.Replace('__VERSION__', '${{ inputs.version }}').Replace('__NAME__', '${{ inputs.name }}')
           [IO.File]::WriteAllText("$PWD/pkg/AppxManifest.xml", $m, (New-Object Text.UTF8Encoding $false))
 
       - name: MSIX packen
@@ -52,5 +60,5 @@ jobs:
       - name: Zum Herunterladen bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: CargoDeckPriceCapture-Store-${{ inputs.version }}
+          name: Store-${{ inputs.version }}-${{ inputs.name }}
           path: "*.msix"

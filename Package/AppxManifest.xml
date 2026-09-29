@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Store Paket für Cargo Deck Price Capture. Die Version füllt der GitHub Workflow ein.
-     DisplayName bleibt vorerst Cargo Deck Scanner, weil dieser Name im Partner Center reserviert ist. Erst den neuen Namen dort reservieren, dann hier ändern. -->
+     Den Namen (__NAME__) wählt man beim Bauen im Workflow. Er muss im Partner Center für diese App reserviert sein. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -13,7 +13,7 @@
   <Identity Name="CargoDeck.CargoDeckScanner" Publisher="CN=FFF76B2B-F752-4A26-B12E-2D33F7D4EEBB" Version="__VERSION__" ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>Cargo Deck Scanner</DisplayName>
+    <DisplayName>__NAME__</DisplayName>
     <PublisherDisplayName>CargoDeck</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>Liest Preise und Bestand von Star Citizen Handelsterminals und schickt sie an Cargo Deck.</Description>
@@ -30,14 +30,14 @@
 
   <Applications>
     <Application Id="CargoDeckScanner" Executable="CargoDeckPriceCapture.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Cargo Deck Scanner" Description="Liest Preise vom Star Citizen Handelsterminal"
+      <uap:VisualElements DisplayName="__NAME__" Description="Liest Preise vom Star Citizen Handelsterminal"
         BackgroundColor="#0c1119" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Cargo Deck" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0c1119" />
       </uap:VisualElements>
       <Extensions>
         <desktop:Extension Category="windows.startupTask" Executable="CargoDeckPriceCapture.exe" EntryPoint="Windows.FullTrustApplication">
-          <desktop:StartupTask TaskId="CargoDeckScannerStartup" Enabled="false" DisplayName="Cargo Deck Scanner" />
+          <desktop:StartupTask TaskId="CargoDeckScannerStartup" Enabled="false" DisplayName="__NAME__" />
         </desktop:Extension>
         <uap3:Extension Category="windows.appExecutionAlias" Executable="CargoDeckPriceCapture.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>
