@@ -1,0 +1,13 @@
+**Linux schneller.** Price Capture für Linux macht pro Scan nur noch eine Aufnahme statt drei und fragt nicht mehr extra beim Server nach, wenn die Website gerade offen war. Unter Wayland mit grim, spectacle oder dem Portal spart das spürbar Zeit bis der Scan auf der Website ist.
+
+Windows bleibt unverändert, die exe ist dieselbe wie in 1.6.0.
+
+**Welche Datei?**
+- `CargoDeckPriceCapture.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckPriceCapture-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+---
+
+**Faster on Linux.** Price Capture for Linux now takes one screenshot per scan instead of three and skips the extra server check when the website was just open. On Wayland with grim, spectacle or the portal this noticeably cuts the time until the scan shows up on the website.
+
+Windows is unchanged, the exe is the same as in 1.6.0.

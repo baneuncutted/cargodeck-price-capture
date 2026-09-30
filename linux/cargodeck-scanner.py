@@ -5,7 +5,7 @@
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -1034,7 +1034,9 @@ class Scanner:
         """Meldet sich beim Server und sagt, ob die Website mit diesem Code gerade offen ist."""
         try:
             status, raw = post(self.c["url"] + "/api/pair/ping", {"pair": self.c["code"]}, 10)
-            return status == 200 and bool(json.loads(raw).get("web"))
+            ok = status == 200 and bool(json.loads(raw).get("web"))
+            if ok: self.web_seen = time.time()
+            return ok
         except Exception: return False
 
     def enqueue(self, body):
@@ -1089,7 +1091,9 @@ class Scanner:
             else:
                 self.ui.state(T("reading"), "warn")
             shots = [im]
-            for _ in range(1 if auto else 2):
+            # Weitere Aufnahmen braucht nur Tesseract. Mit PaddleOCR reicht eine, das spart unter Wayland Sekunden,
+            # weil grim, spectacle oder das Portal für jedes Bild neu starten.
+            for _ in range(0 if paddle() else (1 if auto else 2)):
                 time.sleep(.35)
                 try: shots.append(screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))[0])
                 except Exception: break
@@ -1106,7 +1110,8 @@ class Scanner:
                 return
             body = {"pair": self.c["code"], "auto": auto, "ocr": ocr, "image": jpeg64(im), "time": int(time.time() * 1000)}
             # Nur senden, wenn die Website offen ist, sonst in der App stapeln
-            if self.pending or not self.ping():
+            # Website war gerade eben offen: nicht extra nachfragen, das spart eine Runde zum Server
+            if self.pending or (time.time() - getattr(self, "web_seen", 0) > 60 and not self.ping()):
                 self.enqueue(body); return
             try: status, raw = post(self.c["url"] + "/api/pair/scan", body)
             except Exception as e:
@@ -1117,6 +1122,7 @@ class Scanner:
                 return
             try: r = json.loads(raw)
             except Exception: r = {}
+            if r.get("web"): self.web_seen = time.time()
             rows = int(r.get("rows") or 0)
             if rows > 0:
                 st = (r.get("station") or "").split(" > ")[-1]
