@@ -1,0 +1,36 @@
+Titel
+Cargo Deck Price Capture 1.7.2
+
+Tag
+V1.7.2
+
+Beschreibung
+**Overlay im Spiel (Beta).** Deine aktive Route von Cargo Deck liegt jetzt als kleines Fenster über Star Citizen. Du siehst jeden Stopp mit Kauf und Verkauf, Ware und SCU. Klick auf einen Stopp zeigt den Preis pro SCU und was es zusammen kostet oder bringt. Unten stehen Gewinn und die höchste Ladung in SCU.
+
+Über **Routen** siehst du deine angepinnten Routen. Ein Klick klappt eine Route auf mit allen Stopps, Waren, SCU und Preisen, mit **Diese Route starten** wird sie zur aktiven Route, auch auf der Website. Ohne Maus geht alles mit Strg+Alt und den Pfeiltasten, Strg+Alt+O schaltet das Overlay ein und aus. Es nimmt dem Spiel nie den Fokus, Star Citizen dafür im Modus Rahmenloses Fenster spielen. Routen pinnst du auf der Website an, dafür muss der Kopplungscode zu deinem Konto gehören.
+
+**Mehrere Bilder pro Terminal.** Nach dem Drücken hörst du einen kurzen Ton, dann ist das Bild gemacht. Im Terminal runterscrollen und nochmal drücken, auch wenn das letzte Bild noch gelesen wird. Alle Bilder landen im selben Scan Check auf der Website.
+
+**Käufe aus der Game.log (Beta).** Wer möchte, schaltet in der App ein, dass Käufe und Verkäufe am Terminal aus der Game.log von Star Citizen übernommen werden. Gesendet werden nur Ort, Shop, Ware, Preis pro SCU, Menge und Uhrzeit. Ist von Haus aus aus.
+
+Behoben, der Wechsel der Tastatursprache mit Alt+Shift konnte eine Fehlermeldung auslösen.
+
+**Welche Datei?**
+- `CargoDeckPriceCapture.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckPriceCapture-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen. Linux bleibt wie in 1.6.3.
+
+---
+
+**In game overlay (beta).** Your active route from Cargo Deck now sits as a small window on top of Star Citizen. You see every stop with buy and sell, goods and SCU. Click a stop to see the price per SCU and the total. At the bottom you see profit and the highest load in SCU.
+
+Under **Routes** you find your pinned routes. One click expands a route with all stops, goods, SCU and prices, **Start this route** makes it your active route, on the website too. Without a mouse everything works with Ctrl+Alt and the arrow keys, Ctrl+Alt+O turns the overlay on and off. It never takes focus from the game, play Star Citizen in borderless window mode. You pin routes on the website, the pairing code has to belong to your account.
+
+**Several screenshots per terminal.** After pressing the key you hear a short sound, then the screenshot is taken. Scroll down in the terminal and press again, even while the last one is still being read. All screenshots go into the same scan check on the website.
+
+**Trades from Game.log (beta).** If you like, turn on that purchases and sales at the terminal are taken from the Star Citizen Game.log. Only location, shop, item, price per SCU, amount and time are sent. Off by default.
+
+Fixed, switching the keyboard language with Alt+Shift could show an error message.
+
+**Which file?**
+- `CargoDeckPriceCapture.exe` is for **Windows** 10 and 11. Just download and run, no installation.
+- `CargoDeckPriceCapture-linux.tar.gz` is for **Linux**. Extract it and run `./install.sh`. Linux stays as in 1.6.3.

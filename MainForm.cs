@@ -57,6 +57,19 @@ class MainForm : Form
     ToolTip tips;
     System.Windows.Forms.Timer timer;
     bool loading;
+    // Overlay über dem Spiel (Beta). Erscheint nur, wenn der Server es für dieses Konto erlaubt.
+    OverlayForm ovl;
+    bool ovlAllowed, ovlBusy;
+    DateTime nextOvl = DateTime.MinValue;
+    JsonNode ovlData;
+    readonly Dictionary<int, bool> keyWas = new();
+    CardPanel pOvl, pGlog;
+    Toggle cOvl, cGlog;
+    Label lGlog;
+    GameLogWatcher glog;
+    DateTime nextGlog = DateTime.MinValue;
+    bool glogBusy;
+    string ovlNote; long ovlNoteRev = -1; DateTime ovlNoteUntil;
 
     float k;
     int S(float v) => (int)Math.Round(v * k);
@@ -81,6 +94,9 @@ class MainForm : Form
         LoadForm();
         SetupTray();
         ApplyPin(false);
+        ovl = new OverlayForm();
+        ovl.Command += (c, id) => _ = OvlCmd(c, id);
+        ovl.Moved2 += () => { cfg.OvlX = ovl.Left; cfg.OvlY = ovl.Top; cfg.Save(); };
         timer = new System.Windows.Forms.Timer { Interval = 50 };
         timer.Tick += Tick;
         timer.Start();
@@ -278,6 +294,30 @@ class MainForm : Form
         lEngine = L(pe, T("engine_load"), 16, 34, cMuted, 9f, false, 336, 34);
         ShowEngine();
 
+        pOvl = Card(p, 658, 10, T("ov_title"));
+        cOvl = Tg(pOvl, T("ov_show"), 16, 38);
+        int oy = Wrap(pOvl, T("ov_hint"), 16, 72, 336, cMuted, 8.5f);
+        pOvl.Height = S(oy + 14);
+        pOvl.Visible = ovlAllowed;
+        int gy0 = 658 + oy + 26;
+        pGlog = Card(p, gy0, 10, T("gl_title"));
+        cGlog = Tg(pGlog, T("gl_on"), 16, 38);
+        lGlog = L(pGlog, "", 16, 70, cMuted, 8.5f, false, 220, 20);
+        var bPick = Btn(pGlog, T("gl_pick"), 244, 64, 108, 28, false, null, 9f);
+        int gy = Wrap(pGlog, T("gl_hint"), 16, 100, 336, cMuted, 8.5f);
+        pGlog.Height = S(gy + 14);
+        pGlog.Visible = ovlAllowed;
+        L(p, " ", 0, gy0 + gy + 20, cBg, 6f);   // Platz unten beim Scrollen
+        ShowGlog();
+        cGlog.CheckedChanged += (s, e) => { if (loading) return; cfg.GameLog = cGlog.Checked; cfg.Save(); glog = null; ShowGlog(); };
+        bPick.Click += (s, e) =>
+        {
+            using var d = new OpenFileDialog { Filter = "Game.log|Game.log|Log|*.log", FileName = "Game.log" };
+            try { var f = GameLogWatcher.Find(cfg.GameLogPath); if (f != null) d.InitialDirectory = System.IO.Path.GetDirectoryName(f); } catch { }
+            if (d.ShowDialog(this) == DialogResult.OK) { cfg.GameLogPath = d.FileName; cfg.Save(); glog = null; ShowGlog(); }
+        };
+        cOvl.CheckedChanged += (s, e) => { if (loading) return; cfg.Overlay = cOvl.Checked; cfg.Save(); ApplyOvl(); };
+
         cSound.CheckedChanged += (s, e) => { if (loading) return; ReadForm(); if (cfg.Sounds) Sound.Play(Sound.On); };
         cNotify.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
         cAutostart.CheckedChanged += (s, e) => { if (!loading) ReadForm(); };
@@ -417,6 +457,8 @@ class MainForm : Form
         nInt.Value = Math.Clamp(cfg.Interval, 3, 60);
         kScan.Vk = cfg.ScanVk; kAuto.Vk = cfg.AutoVk;
         cSound.Checked = cfg.Sounds; cNotify.Checked = cfg.Notify; cAutostart.Checked = cfg.Autostart; cTop.Checked = cfg.TopMost;
+        if (cOvl != null) cOvl.Checked = cfg.Overlay;
+        if (cGlog != null) cGlog.Checked = cfg.GameLog;
         if (running) foreach (var t in new[] { tUrl, tCode }) { t.ReadOnly = true; t.ForeColor = cMuted; t.BackColor = cPanel; }
         loading = false;
         SyncAuto();
@@ -442,6 +484,7 @@ class MainForm : Form
         menu.Items.Add(T("scan_now"), null, async (s, e) => { if (!running) StartScanner(); if (running) await Scan(false); });
         miAuto = new ToolStripMenuItem(T("auto"), null, (s, e) => { cAutoMode.Checked = !cAutoMode.Checked; }) { Checked = cAutoMode.Checked };
         menu.Items.Add(miAuto);
+        if (ovlAllowed) menu.Items.Add(new ToolStripMenuItem(T("ov_tray"), null, (s, e) => { cfg.Overlay = !cfg.Overlay; cfg.Save(); ApplyOvl(); }) { Checked = cfg.Overlay });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(T("tray_quit"), null, (s, e) => Close());
         if (tray == null) { tray = new NotifyIcon { Icon = Icon, Text = "Cargo Deck Price Capture", Visible = true }; tray.DoubleClick += (s, e) => ShowWindow(); }
@@ -553,6 +596,7 @@ class MainForm : Form
 
     async void Tick(object sender, EventArgs e)
     {
+        try { OverlayTick(); } catch (Exception ex) { Log(T("err", ex.Message)); }
         if (!running) return;
         try
         {
@@ -571,6 +615,135 @@ class MainForm : Form
             else if (cAutoMode.Checked && !busy && DateTime.Now >= nextAuto) { nextAuto = DateTime.Now.AddSeconds(cfg.Interval); await Scan(true); }
         }
         catch (Exception ex) { Log(T("err", ex.Message)); busy = false; }
+    }
+
+    // ---------------- Overlay ----------------
+    bool Edge(int vk, bool combo)
+    {
+        bool d = combo && Down(vk), was = keyWas.TryGetValue(vk, out var w) && w;
+        keyWas[vk] = d; return d && !was;
+    }
+    void OverlayTick()
+    {
+        bool combo = Down(0x11) && Down(0x12);   // Strg und Alt
+        bool kO = Edge(0x4F, combo), kR = Edge(0x52, combo), kL = Edge(0x25, combo), kRt = Edge(0x27, combo), kU = Edge(0x26, combo), kD = Edge(0x28, combo), kE = Edge(0x0D, combo), kN = Edge(0x4E, combo);
+        if (ovlAllowed)
+        {
+            if (kO) { cfg.Overlay = !cfg.Overlay; cfg.Save(); ApplyOvl(); Log(T(cfg.Overlay ? "ov_on" : "ov_off")); }
+            if (ovl.Visible)
+            {
+                if (kR) ovl.TogglePicker();
+                if (ovl.PickerOpen) { if (kU) ovl.MoveSel(-1); if (kD) ovl.MoveSel(1); if (kRt) ovl.ToggleOpenSel(); if (kE) { var id = ovl.SelectedId(); if (id != null) _ = OvlCmd("pick", id); } if (kL) ovl.ClosePicker(); }
+                else { if (kRt) _ = OvlCmd("next", null); if (kL) _ = OvlCmd("prev", null); if (kN) _ = OvlCmd("replan", null); }
+            }
+        }
+        // Game.log jede Sekunde auf neue Käufe prüfen
+        if (ovlAllowed && cfg.GameLog && DateTime.Now >= nextGlog)
+        {
+            nextGlog = DateTime.Now.AddSeconds(1);
+            if (glog == null) { var f = GameLogWatcher.Find(cfg.GameLogPath); if (f != null) glog = new GameLogWatcher(f); else nextGlog = DateTime.Now.AddSeconds(30); ShowGlog(); }
+            if (glog != null) { glog.Poll(); var list = glog.Take(); if (list != null && !glogBusy) _ = SendTrades(list); }
+        }
+        if (DateTime.Now >= nextOvl && !ovlBusy)
+        {
+            nextOvl = DateTime.Now.AddSeconds(ovl.Visible ? 3 : ovlAllowed ? 20 : 60);
+            _ = OvlFetch();
+        }
+    }
+    string OvlUrl => cfg.Url.TrimEnd('/') + "/api/pair/" + cfg.Code + "/overlay";
+    async Task OvlFetch()
+    {
+        if (ovlBusy || !CodeRe.IsMatch(cfg.Code) || !cfg.Url.StartsWith("http")) return;
+        ovlBusy = true;
+        try
+        {
+            var r = await Http.GetAsync(OvlUrl);
+            if ((int)r.StatusCode == 404 || (int)r.StatusCode == 403) SetOvlAllowed(false);
+            else if (r.IsSuccessStatusCode)
+            {
+                ovlData = JsonNode.Parse(await r.Content.ReadAsStringAsync());
+                SetOvlAllowed(true);
+                long rev = ovlData?["rev"]?.GetValue<long>() ?? 0;
+                ovl.SetData(ovlData, ovlNote != null && rev == ovlNoteRev && DateTime.Now < ovlNoteUntil ? ovlNote : null);
+            }
+        }
+        catch { if (ovl.Visible) ovl.SetData(ovlData, T("ov_offline")); }
+        finally { ovlBusy = false; }
+    }
+    async Task OvlCmd(string cmd, string id)
+    {
+        if (!CodeRe.IsMatch(cfg.Code)) return;
+        if (cmd == "pick") ovl.ClosePicker();
+        try
+        {
+            using var c = new StringContent(JsonSerializer.Serialize(new { cmd, id }), Encoding.UTF8, "application/json");
+            var r = await Http.PostAsync(OvlUrl, c);
+            var txt = await r.Content.ReadAsStringAsync();
+            if (r.IsSuccessStatusCode)
+            {
+                ovlData = JsonNode.Parse(txt); Beep(Sound.On);
+                if (cmd == "replan") { bool web = (bool?)ovlData?["web"] ?? false; ovlNote = web ? T("ov_replan_wait") : T("ov_replan_web"); ovlNoteRev = ovlData?["rev"]?.GetValue<long>() ?? 0; ovlNoteUntil = DateTime.Now.AddSeconds(web ? 20 : 8); }
+                ovl.SetData(ovlData, cmd == "replan" ? ovlNote : null);
+            }
+            else Log(T("ov_cmd_fail", (string)JsonNode.Parse(txt)?["error"] ?? ((int)r.StatusCode).ToString()));
+        }
+        catch (Exception ex) { Log(T("ov_cmd_fail", ex.Message)); }
+        nextOvl = DateTime.Now.AddSeconds(3);
+    }
+    void ShowGlog()
+    {
+        if (lGlog == null || lGlog.IsDisposed) return;
+        var f = glog?.Path ?? (cfg.GameLog ? GameLogWatcher.Find(cfg.GameLogPath) : null);
+        lGlog.Text = f != null ? T("gl_found", f.Length > 34 ? "…" + f[^33..] : f) : cfg.GameLog ? T("gl_none") : "";
+        lGlog.ForeColor = f != null ? cMuted : cWarn;
+    }
+    async Task SendTrades(List<JsonObject> list)
+    {
+        glogBusy = true;
+        try
+        {
+            // Genau das, was gesendet wird, steht im Verlauf der App
+            foreach (var t in list) Log(T("gl_out", T((string)t["kind"] == "buy" ? "gl_buy" : "gl_sell"), (double)t["qty"], Math.Round((double)t["price"]), (string)t["loc"]));
+            var arr = new JsonArray(); foreach (var t in list) arr.Add(t.DeepClone());
+            var body = new JsonObject { ["pair"] = cfg.Code, ["trades"] = arr };
+            using var c = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            var r = await Http.PostAsync(cfg.Url.TrimEnd('/') + "/api/pair/trade", c);
+            var j = JsonNode.Parse(await r.Content.ReadAsStringAsync());
+            if (!r.IsSuccessStatusCode) { Log(T("gl_fail", (string)j?["error"] ?? ((int)r.StatusCode).ToString())); return; }
+            foreach (var x in j?["results"] as JsonArray ?? new JsonArray())
+            {
+                var st = ((string)x?["station"] ?? "").Split(" > ").LastOrDefault() ?? "";
+                Log(T("gl_ok", (string)x?["item"], (string)x?["action"] == "SELLS" ? T("gl_buy") : T("gl_sell"), Math.Round((double?)x?["price"] ?? 0), st));
+            }
+            Beep(Sound.Success); Notify(T("gl_notify"));
+            if (!((bool?)j?["web"] ?? false)) Log(T("gl_web"));
+        }
+        catch (Exception ex) { Log(T("gl_fail", ex.Message)); }
+        finally { glogBusy = false; }
+    }
+    void SetOvlAllowed(bool a)
+    {
+        if (ovlAllowed == a) return;
+        ovlAllowed = a;
+        if (pOvl != null) pOvl.Visible = a;
+        if (pGlog != null) pGlog.Visible = a;
+        ApplyOvl(); SetupTray();
+    }
+    void ApplyOvl()
+    {
+        bool show = ovlAllowed && cfg.Overlay;
+        if (cOvl != null && cOvl.Checked != cfg.Overlay) { loading = true; cOvl.Checked = cfg.Overlay; loading = false; }
+        if (show && !ovl.Visible)
+        {
+            var sc = Screen.PrimaryScreen.Bounds;
+            bool ok = cfg.OvlX >= 0 && cfg.OvlY >= 0 && Screen.AllScreens.Any(s => s.Bounds.Contains(cfg.OvlX + 20, cfg.OvlY + 20));
+            ovl.Location = ok ? new Point(cfg.OvlX, cfg.OvlY) : new Point(sc.Right - ovl.Width - S(24), sc.Top + S(24));
+            ovl.Show();
+            ovl.SetData(ovlData);
+            nextOvl = DateTime.Now;
+        }
+        else if (!show && ovl.Visible) ovl.Hide();
+        SetupTray();
     }
 
     // Fragt nebenbei, ob die Website mit diesem Code gerade offen ist
@@ -710,13 +883,26 @@ class MainForm : Form
         return Convert.ToBase64String(ms.ToArray());
     }
 
-    async Task Scan(bool auto)
+    // Bilder, die gemacht wurden, während das letzte noch gelesen wird. Werden danach der Reihe nach gelesen
+    readonly Queue<Bitmap> backlog = new();
+
+    async Task Scan(bool auto, Bitmap pre = null)
     {
-        if (busy) { if (!auto) Log(T("busy")); return; }
+        if (busy && pre == null)
+        {
+            if (auto) return;
+            // Noch am Lesen: das neue Bild trotzdem sofort machen, Ton, und danach lesen.
+            // So kann man im Terminal runterscrollen und direkt nochmal drücken, ohne zu warten
+            try { backlog.Enqueue(TakeShot()); } catch (Exception ex) { Log(ex.Message); return; }
+            Beep(Sound.Shot); Log(T("held", backlog.Count));
+            return;
+        }
         busy = true;
         try
         {
-            using var bmp = TakeShot();
+            using var bmp = pre ?? TakeShot();
+            // Bild ist gemacht: gleich der Ton, dann darf man weiterscrollen
+            if (!auto && pre == null) Beep(Sound.Shot);
             if (auto)
             {
                 var pr = Print(bmp);
@@ -724,10 +910,11 @@ class MainForm : Form
                 lastPrint = pr;
             }
             if (!auto) SetState(T("reading"), stateSub, cWarn);
-            // Zwei weitere Bilder kurz danach, das Terminal flimmert im Spiel leicht. Die Preise werden auf allen gelesen.
+            // Zwei weitere Bilder kurz danach braucht nur die Windows Texterkennung, das Terminal flimmert im Spiel leicht.
+            // PaddleOCR liest nur das erste, dann keine weiteren Bilder, sonst wäre schon runtergescrollt
             var shots = new List<Bitmap> { bmp };
             var fg = GetForegroundWindow();
-            for (int i = 0; i < (auto ? 1 : 2); i++)
+            for (int i = 0; i < (pre == null && PaddleOcr.LoadError != null ? (auto ? 1 : 2) : 0); i++)
             {
                 await Task.Delay(350);
                 if (GetForegroundWindow() != fg) break;
@@ -789,6 +976,8 @@ class MainForm : Form
         {
             busy = false;
             if (running && !auto && stateTitle == T("reading")) ShowRunning();
+            // gemerkte Bilder der Reihe nach lesen
+            if (backlog.Count > 0) { var nx = backlog.Dequeue(); _ = Scan(false, nx); }
         }
     }
 }

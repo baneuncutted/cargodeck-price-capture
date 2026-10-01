@@ -22,6 +22,11 @@ class Config
     public bool TopMost { get; set; } = false;      // großes Fenster immer im Vordergrund
     public int PinX { get; set; } = -1;
     public int PinY { get; set; } = -1;
+    public bool Overlay { get; set; } = true;       // Overlay über dem Spiel (Beta)
+    public int OvlX { get; set; } = -1;
+    public int OvlY { get; set; } = -1;
+    public bool GameLog { get; set; } = false;      // Käufe aus der Game.log übernehmen (Beta, aus bis man es einschaltet)
+    public string GameLogPath { get; set; } = "";   // leer heißt automatisch suchen
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern ushort GetUserDefaultUILanguage();
     public static string SystemLang() { try { return (GetUserDefaultUILanguage() & 0x3FF) == 0x07 ? "de" : "en"; } catch { return "de"; } }

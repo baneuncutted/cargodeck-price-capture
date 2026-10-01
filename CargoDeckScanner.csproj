@@ -12,7 +12,7 @@
     <RootNamespace>CargoDeckScanner</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.6.0</Version>
+    <Version>1.7.2</Version>
     <Product>Cargo Deck Price Capture</Product>
     <Company>Cargo Deck</Company>
     <Description>Liest Star Citizen Handelsterminals und schickt die Preise an Cargo Deck</Description>
@@ -22,7 +22,8 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- echte Kulturen, sonst stürzt WinForms beim Wechsel der Tastatursprache ab. Gerechnet wird trotzdem invariant, siehe Program.Main -->
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

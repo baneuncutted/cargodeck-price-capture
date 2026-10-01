@@ -24,13 +24,20 @@ Die Automatik schaut alle paar Sekunden aufs Bild und sendet nur, wenn wirklich 
 
 Star Citizen am besten im Modus **Rahmenloses Fenster** spielen, im echten Vollbild bleibt der Screenshot schwarz.
 
+Gibt es weiter unten im Terminal mehr Waren, nach dem kurzen Ton runterscrollen und nochmal drücken. Alle Bilder landen im selben Scan Check.
+
+## Overlay im Spiel (Beta, Windows)
+
+Die aktive Route von Cargo Deck liegt als kleines Fenster über dem Spiel. Jeder Stopp zeigt Kauf und Verkauf, Ware und SCU, ein Klick darauf die Preise. Über **Routen** wählst du eine angepinnte Route, klappst sie auf und startest sie. Ohne Maus geht es mit Strg+Alt und den Pfeiltasten, Strg+Alt+O schaltet es ein und aus. Das Overlay nimmt dem Spiel nie den Fokus.
+
 ## Was die App macht und was nicht
 
 - Macht einen Screenshot vom aktiven Fenster, nur wenn du die Taste drückst oder die Automatik läuft
 - Liest den Text mit PaddleOCR, der gleichen Texterkennung wie auf der Website, alles auf deinem PC. Die Modelle liegen im Ordner `ocr`
 - Geht das mal nicht, liest unter Windows die eingebaute Texterkennung und unter Linux Tesseract
 - Schickt den erkannten Text und ein verkleinertes Bild an die Adresse, die du einträgst
-- Liest keine Spieldateien, greift nicht ins Spiel ein und drückt keine Tasten
+- Liest keine Spieldateien, außer du schaltest Käufe aus der Game.log ein. Dann gehen nur Ort, Shop, Ware, Preis pro SCU, Menge und Uhrzeit von Käufen und Verkäufen raus
+- Greift nicht ins Spiel ein und drückt keine Tasten
 - Speichert ihre Einstellungen in `%APPDATA%\CargoDeck\scanner.json`
 
 Der ganze Quellcode liegt hier im Repo. Die exe wird von GitHub selbst aus genau diesem Code gebaut, siehe `.github/workflows/build.yml`, das Linux Paket mit `.github/workflows/linux.yml`. Die Prüfsumme steht beim Release in `SHA256.txt`.

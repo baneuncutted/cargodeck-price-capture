@@ -7,6 +7,12 @@ static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        // Zahlen und Texte immer invariant wie bisher, egal welche Sprache Windows hat
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        System.Globalization.CultureInfo.DefaultThreadCurrentCulture = inv;
+        System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = inv;
+        System.Globalization.CultureInfo.CurrentCulture = inv;
+        System.Globalization.CultureInfo.CurrentUICulture = inv;
         // Prüfmodus, liest ein Bild und schreibt das Ergebnis der Texterkennung in eine Datei
         if (args.Length >= 3 && args[0] == "--ocr-test")
         {
@@ -73,3 +79,4 @@ static class Program
         if (show) try { MessageBox.Show(Lang.T("crash") + "\n\n" + ex?.Message + "\n\n" + Lang.T("crash_log"), "Cargo Deck Price Capture"); } catch { }
     }
 }
+
