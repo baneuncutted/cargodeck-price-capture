@@ -5,7 +5,7 @@
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.6.2"
+VERSION = "1.6.3"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -39,12 +39,13 @@ TEXT = {
     "h1_t": ("Code holen", "Get the code"), "h1": ("Öffne Cargo Deck im Browser, geh auf Einstellungen und kopiere den Code unter Price Capture.", "Open Cargo Deck in your browser, go to Settings and copy the code under Price Capture."),
     "h2_t": ("Code eintragen", "Enter the code"), "h2": ("Unter Einstellungen den Code einfügen. Die Adresse der Website stimmt schon.", "Paste the code under Settings. The website address is already correct."),
     "h3_t": ("Starten", "Start"), "h3": ("Auf Start drücken. Der Punkt wird grün. Unter Wayland kommt einmal ein Fenster vom System für die Tasten, dort bestätigen.", "Press Start. The dot turns green. On Wayland the system shows a window for the keys once, confirm it there."),
-    "h4_t": ("Im Spiel scannen", "Scan in game"), "h4": ("Am Handelsterminal {k} drücken. Oder Automatik einschalten, dann liest er von selbst, sobald ein Terminal zu sehen ist.", "At the trade terminal press {k}. Or turn on auto mode, then it reads by itself whenever a terminal is visible."),
-    "h5_t": ("Auf der Website übernehmen", "Apply on the website"), "h5": ("Der Scan erscheint auf der Website. Kurz prüfen und übernehmen, dann fließen die Preise in deine Routen.", "The scan shows up on the website. Check it quickly and apply it, then the prices flow into your routes."),
+    "h4_t": ("Im Spiel scannen", "Scan in game"), "h4": ("Am Handelsterminal {k} drücken. Ein kurzer Ton sagt dir, dass das Bild gemacht ist. Gibt es weiter unten noch mehr Waren, im Terminal runterscrollen und nochmal {k} drücken, so oft du willst.", "At the trade terminal press {k}. A short sound tells you the screenshot is taken. If there are more goods further down, scroll down in the terminal and press {k} again, as often as you like."),
+    "h5_t": ("Auf der Website übernehmen", "Apply on the website"), "h5": ("Der Scan Check erscheint auf der Website und wächst mit jedem weiteren Bild. Du musst zwischendurch nichts drücken. Am Ende einmal prüfen und übernehmen, dann fließen die Preise in deine Routen.", "The scan check shows up on the website and grows with every further screenshot. You don't need to press anything in between. At the end check it once and apply, then the prices flow into your routes."),
     "tips_title": ("Tipps", "Tips"),
     "tip1": ("Setz auf der Website deinen Standort, bei der Station auf „Ich bin hier“. Dann ist die Station sofort klar und alles geht schneller.", "Set your location on the website, click “I'm here” on the station. Then the station is clear right away and everything is faster."),
     "tip2": ("Das Terminal sollte groß und gut lesbar im Bild sein. Mit Screenshot testen siehst du, was Price Capture sieht.", "The terminal should be large and readable on screen. Test screenshot shows what Price Capture sees."),
     "tip3": ("Mit der Nadel oben rechts bleibt ein kleines Fenster immer im Vordergrund, wie beim Windows Rechner.", "The pin at the top right keeps a small window always on top, like the Windows calculator."),
+    "tip5": ("Bilder mit höchstens 4 Minuten Abstand gehören zum selben Terminal. Die Station vom ersten Bild gilt für alle.", "Screenshots at most 4 minutes apart belong to the same terminal. The station from the first one counts for all of them."),
     "tip4": ("Mehrere Bildschirme gehen automatisch, Price Capture nimmt den mit dem Spiel.", "Multiple screens work automatically, Price Capture takes the one with the game."),
     "open_site": ("Website öffnen", "Open website"),
 
@@ -81,6 +82,7 @@ TEXT = {
     "no_tess": ("Tesseract fehlt. Bitte install.sh ausführen oder tesseract installieren.", "Tesseract is missing. Run install.sh or install tesseract."),
     "no_shot": ("Kein Screenshot möglich. Unter Wayland grim, spectacle oder gnome-screenshot installieren.", "No screenshot possible. On Wayland install grim, spectacle or gnome-screenshot."),
     "busy": ("Noch beschäftigt, einen Moment", "Still busy, one moment"),
+    "held": ("Bild gemacht, wird gleich gelesen ({n} warten)", "Screenshot taken, read in a moment ({n} waiting)"),
     "sent_ok": ("{n} Preise erkannt {st}", "{n} prices recognized {st}"),
     "sent_look": ("{n} Preise erkannt {st}, schau auf die Seite", "{n} prices recognized {st}, check the website"),
     "q_title": ("{n} Scans warten", "{n} scans waiting"),
@@ -100,7 +102,6 @@ TEXT = {
     "engine_tess": ("Neue Texterkennung fehlt, lese mit Tesseract. Bitte install.sh nochmal ausführen.", "New text recognition missing, reading with Tesseract. Please run install.sh again."),
     "auto_on": ("Automatik an, alle {n} Sekunden", "Auto on, every {n} seconds"),
     "auto_off": ("Automatik aus", "Auto off"),
-    "auto_wait": ("Automatik an, noch kein Terminal zu sehen", "Auto on, no terminal visible yet"),
     "saved": ("Gespeichert", "Saved"),
     "shot_ok": ("Screenshot mit {m}, {w} × {h} Pixel", "Screenshot with {m}, {w} × {h} pixels"),
     "shot_saved": ("Zum Anschauen gespeichert: {p}", "Saved for checking: {p}"),
@@ -135,6 +136,7 @@ def load_conf():
         with open(CONF_FILE, encoding="utf-8") as f: c.update(json.load(f))
     except Exception: pass
     c["interval"] = max(3, min(60, int(c.get("interval") or 5)))
+    c["mode"] = "hotkey"   # Automatik gibt es unter Linux nicht mehr, sie hat Stationen verwechselt
     return c
 
 def save_conf(c):
@@ -170,7 +172,8 @@ def make_wav(notes, vol=0.07, rate=44100):
     return out.getvalue()
 
 SOUNDS = {"on": [(660, 0, .09), (880, .07, .14)], "off": [(740, 0, .09), (554, .07, .14)],
-          "ok": [(784, 0, .08), (988, .06, .08), (1319, .12, .18)], "err": [(330, 0, .16)], "queued": [(698, 0, .12)]}
+          "ok": [(784, 0, .08), (988, .06, .08), (1319, .12, .18)], "err": [(330, 0, .16)], "queued": [(698, 0, .12)],
+          "shot": [(1175, 0, .05), (1568, .04, .06)]}
 _sound_files = {}
 def play(kind):
     player = next((p for p in ("pw-play", "paplay", "aplay") if shutil.which(p)), None)
@@ -759,7 +762,7 @@ class Hotkeys:
         try:
             from pynput import keyboard
             if not os.environ.get("DISPLAY"): return False
-            self.combos = [(self.parse(scan_key), self.on_scan), (self.parse(auto_key), self.on_auto)]
+            self.combos = [(self.parse(scan_key), self.on_scan)]
             def press(key):
                 n = self._name(key)
                 if n is None: return
@@ -876,7 +879,7 @@ class PortalHotkeys:
             unwrap_msg(p.conn.send_and_get_reply(message_bus.AddMatch(act), timeout=5))
             with p.conn.filter(act, bufsize=32) as q:
                 sc = []
-                for sid, desc, combo in (("scan", T("k_scan"), scan_key), ("toggle", T("k_auto"), auto_key)):
+                for sid, desc, combo in (("scan", T("k_scan"), scan_key),):
                     o = {"description": ("s", "Cargo Deck: " + desc)}
                     tr = spec_trigger(combo)
                     if tr: o["preferred_trigger"] = ("s", tr)
@@ -953,7 +956,7 @@ def serve_commands(handler):
 class Scanner:
     def __init__(self, conf, ui):
         self.c, self.ui = conf, ui
-        self.running = False; self.busy = False; self.last_print = None; self.next_auto = 0; self.next_ping = 0
+        self.running = False; self.busy = False; self.last_print = None; self.next_auto = 0; self.next_ping = 0; self.backlog = []
         # Scans, die warten, weil die Website nicht offen ist. Gehen raus, sobald sie offen ist.
         self.pending = []; self.flushing = False; self.next_web = 0
         self.hot = Hotkeys(lambda: self.trigger("scan"), lambda: self.trigger("toggle"))
@@ -966,7 +969,7 @@ class Scanner:
         if time.time() - self._last_trig.get(what, 0) < .5: return
         self._last_trig[what] = time.time()
         if what == "scan": threading.Thread(target=self.scan, args=(False,), daemon=True).start()
-        elif what == "toggle":
+        elif what == "toggle" and False:   # Automatik entfernt
             self.c["mode"] = "hotkey" if self.c["mode"] == "auto" else "auto"
             on = self.c["mode"] == "auto"
             self.ui.event("mode", self.c["mode"])
@@ -1014,7 +1017,7 @@ class Scanner:
 
     def show_running(self):
         if self.pending: self.ui.state(T("q_title1") if len(self.pending) == 1 else T("q_title", n=len(self.pending)), "warn"); return
-        self.ui.state(T("running_auto", n=self.c["interval"]) if self.c["mode"] == "auto" else T("running_hot", k=pretty_key(self.c["scan_key"])), "good")
+        self.ui.state(T("running_hot", k=pretty_key(self.c["scan_key"])), "good")
 
     def loop(self):
         while True:
@@ -1027,11 +1030,7 @@ class Scanner:
             if now >= self.next_ping:
                 self.next_ping = now + 60
                 threading.Thread(target=self.ping, daemon=True).start()
-            if self.c["mode"] == "auto" and not self.busy and now >= self.next_auto:
-                self.next_auto = now + self.c["interval"]
-                # Ein Fehler in einem Scan darf die Schleife nicht beenden, sonst läuft die Automatik still nicht mehr
-                try: self.scan(True)
-                except Exception as e: self.ui.log(T("ocr_fail") + f" {e}")
+            # Automatik entfernt, gescannt wird nur per Taste
 
     def ping(self):
         """Meldet sich beim Server und sagt, ob die Website mit diesem Code gerade offen ist."""
@@ -1070,52 +1069,50 @@ class Scanner:
             elif not self.pending: self.ui.state(T("stopped"), "muted")
         finally: self.flushing = False
 
-    def scan(self, auto):
-        if self.busy:
-            if not auto: self.ui.log(T("busy"))
+    def scan(self, auto, pre=None):
+        if self.busy and pre is None:
+            if auto: return
+            # Noch am Lesen des letzten Bildes: das neue Bild trotzdem sofort machen und danach lesen.
+            # So kann man runterscrollen und direkt nochmal drücken, ohne zu warten
+            try: im, how = screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))
+            except Exception as e: self.ui.log(str(e)); return
+            if self.c["sounds"]: play("shot")
+            self.backlog.append(im); self.ui.log(T("held", n=len(self.backlog)))
             return
         if not self.running and not auto:
             if not self.start(): return
         self.busy = True
         try:
-            try: im, how = screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))
-            except Exception as e:
-                self.ui.log(str(e))
-                if not auto: self.ui.state(T("no_shot"), "bad"); play("err") if self.c["sounds"] else None
-                return
-            pre = None
+            if pre is not None: im = pre
+            else:
+                try: im, how = screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))
+                except Exception as e:
+                    self.ui.log(str(e))
+                    if not auto: self.ui.state(T("no_shot"), "bad"); play("err") if self.c["sounds"] else None
+                    return
             if auto:
                 fp = fingerprint(im)
                 if fp == self.last_print: return
                 self.last_print = fp
-                # erst schauen, ob überhaupt ein Terminal zu sehen ist. Mit PaddleOCR gleich richtig lesen und das Ergebnis behalten,
-                # Tesseract erkennt die Terminal Schrift oft nicht, dann sprang die Automatik nie an. Tesseract nur, wenn Paddle fehlt.
-                p = paddle()
-                try:
-                    if p: pre = p.read(im); quick = pre
-                    elif tesseract_ok(): quick = run_ocr([im], quick=True)
-                    else: return
-                except Exception as e:
-                    self.ui.log(T("ocr_fail") + f" {e}"); self.last_print = None; return
-                txt = " ".join(l["t"] for ps in quick["passes"] for l in ps["lines"])
-                if not (TERMINAL_WORDS.search(txt) or len(set(m.upper() for m in TERM_WORD.findall(txt))) >= 3):
-                    pre = None; forget_monitor()
-                    # damit man sieht, dass die Automatik läuft und nur auf ein Terminal wartet
-                    if time.time() - getattr(self, "wait_note", 0) > 30: self.wait_note = time.time(); self.ui.state(T("auto_wait"), "muted")
-                    return
+                # erst kurz schauen, ob überhaupt ein Terminal zu sehen ist
+                quick = run_ocr([im], quick=True)
+                txt = " ".join(l["t"] for p in quick["passes"] for l in p["lines"])
+                if not TERMINAL_WORDS.search(txt): forget_monitor(); return
             else:
                 self.ui.state(T("reading"), "warn")
             shots = [im]
             # Weitere Aufnahmen braucht nur Tesseract. Mit PaddleOCR reicht eine, das spart unter Wayland Sekunden,
             # weil grim, spectacle oder das Portal für jedes Bild neu starten.
-            for _ in range(0 if paddle() else (1 if auto else 2)):
+            for _ in range(0 if paddle() or pre is not None else (1 if auto else 2)):
                 time.sleep(.35)
                 try: shots.append(screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))[0])
                 except Exception: break
+            # Bild ist gemacht: kurzer Ton, jetzt darf man im Terminal weiterscrollen und nochmal drücken
+            if not auto and pre is None and self.c["sounds"]: play("shot")
             try:
-                ocr = pre
+                ocr = None
                 p = paddle()
-                if p and not ocr:
+                if p:
                     try: ocr = p.read(shots[0])
                     except Exception as e: self.ui.log(T("paddle_fail") + f" {e}")
                 if not ocr or not any(ps["lines"] for ps in ocr["passes"]): ocr = run_ocr(shots)
@@ -1152,7 +1149,8 @@ class Scanner:
                 if self.c["sounds"]: play("err")
         finally:
             self.busy = False
-            if self.running and not auto: pass
+            # gemerkte Bilder der Reihe nach lesen
+            if self.backlog: nxt = self.backlog.pop(0); threading.Thread(target=self.scan, args=(False, nxt), daemon=True).start()
 
 # ---------------------------------------------------------------- Oberfläche
 C = {"bg": "#0c1119", "panel": "#141c28", "panel2": "#1a2433", "line": "#243142", "line2": "#304056", "text": "#eef3f9", "muted": "#8f9db1", "dim": "#66748a",
@@ -1388,15 +1386,6 @@ class App:
         self.startbtn = self.button(p, T("start"), self.toggle_run, primary=True, w=self.W - 32, h=54, size=12, icon="▶")
         self.startbtn.pack(pady=(0, 8))
         self.button(p, T("scan_now"), lambda: self.sc.trigger("scan"), w=self.W - 32, h=42, size=10).pack(pady=(0, 10))
-        c = self.card(p)
-        r = tk.Frame(c, bg=C["panel"]); r.pack(fill="x")
-        self.autov = tk.BooleanVar(value=self.c["mode"] == "auto")
-        self.toggle(r, T("auto"), self.autov, self.auto_changed).pack(side="left")
-        self.lbl(r, T("sec"), fg=C["muted"], size=9).pack(side="right")
-        self.interval = tk.IntVar(value=self.c["interval"])
-        tk.Spinbox(r, from_=3, to=60, width=3, textvariable=self.interval, command=self.apply, bg=C["panel2"], fg=C["text"], buttonbackground=C["panel2"],
-                   insertbackground=C["text"], relief="flat", highlightthickness=1, highlightbackground=C["line2"], font=self.F(10)).pack(side="right", padx=6)
-        self.lbl(r, T("every"), fg=C["muted"], size=9).pack(side="right")
         c = self.card(p, T("last_title"))
         self.last_t = self.lbl(c, T("last_none"), size=12, bold=True); self.last_t.pack(anchor="w")
         self.last_s = self.lbl(c, "", fg=C["muted"], size=9, wrap=330); self.last_s.pack(anchor="w")
@@ -1421,14 +1410,14 @@ class App:
 
         c = self.card(p, T("keys_title"))
         self.keys = {}
-        for name, lbl in (("scan_key", T("k_scan")), ("auto_key", T("k_auto"))):
+        for name, lbl in (("scan_key", T("k_scan")),):
             r = tk.Frame(c, bg=C["panel"]); r.pack(fill="x", pady=3)
             self.lbl(r, lbl, size=10).pack(side="left")
             self.button(r, T("record"), lambda n=name: self.record(n), w=96, h=30, size=9).pack(side="right")
             v = tk.StringVar(value=pretty_key(self.c[name])); self.keys[name] = v
             tk.Label(r, textvariable=v, bg=C["panel2"], fg=C["acc"], font=(self.mono, 10, "bold"), padx=8, pady=4, width=10).pack(side="right", padx=8)
         self.lbl(c, T("keys_hint"), fg=C["dim"], size=8, wrap=320).pack(anchor="w", pady=(8, 0))
-        tk.Label(c, text=f"{APP} --scan\n{APP} --toggle", bg=C["panel2"], fg=C["text"], font=(self.mono, 9), anchor="w", justify="left", padx=8, pady=4).pack(fill="x", pady=(4, 0))
+        tk.Label(c, text=f"{APP} --scan", bg=C["panel2"], fg=C["text"], font=(self.mono, 9), anchor="w", justify="left", padx=8, pady=4).pack(fill="x", pady=(4, 0))
 
         c = self.card(p, T("shot"))
         self.shot = tk.StringVar(value=self.c.get("shot", "auto"))
@@ -1472,7 +1461,7 @@ class App:
             self.lbl(tx, T(t), size=10, bold=True).pack(anchor="w")
             self.lbl(tx, T(d, k=pretty_key(self.c["scan_key"])), fg=C["muted"], size=9, wrap=280).pack(anchor="w")
         c = self.card(p, T("tips_title"))
-        for tk_ in ("tip1", "tip2", "tip3", "tip4"):
+        for tk_ in ("tip1", "tip5", "tip2", "tip3", "tip4"):
             r = tk.Frame(c, bg=C["panel"]); r.pack(fill="x", pady=3)
             tk.Label(r, text="•", bg=C["panel"], fg=C["acc"], font=self.F(11, True)).pack(side="left", anchor="n")
             self.lbl(r, T(tk_), fg=C["muted"], size=9, wrap=300).pack(side="left", padx=(6, 0))
@@ -1491,9 +1480,7 @@ class App:
         self.mini_s = self.lbl(tx, "", fg=C["muted"], size=8, wrap=210); self.mini_s.pack(anchor="w")
         self.icon_btn(r, "unpin", lambda: self.set_pin(False)).pack(side="right", anchor="n")
         b = tk.Frame(m, bg=C["bg"]); b.pack(fill="x", pady=(10, 6))
-        self.button(b, T("k_scan"), lambda: self.sc.trigger("scan"), primary=True, w=134, h=42, size=10).pack(side="left")
-        self.mini_auto = self.button(b, T("auto_short"), lambda: (self.autov.set(not self.autov.get()), self.auto_changed()), primary=self.c["mode"] == "auto", w=134, h=42, size=10)
-        self.mini_auto.pack(side="right")
+        self.button(b, T("k_scan"), lambda: self.sc.trigger("scan"), primary=True, w=272, h=42, size=10).pack(side="left")
         self.mini_last = self.lbl(m, T("last_none"), fg=C["muted"], size=8, wrap=270); self.mini_last.pack(anchor="w")
 
     # ------------------------------------------------ Seiten und Fenster
@@ -1535,7 +1522,7 @@ class App:
     def sub_text(self, kind):
         if self.sc.pending and kind == "warn": return T("q_sub")
         if self.sc.running and kind in ("good", "warn"):
-            return T("sub_auto", n=self.c["interval"]) if self.c["mode"] == "auto" else T("sub_hot", k=pretty_key(self.c["scan_key"]))
+            return T("sub_hot", k=pretty_key(self.c["scan_key"]))
         if not self.sc.running and kind == "muted": return T("sub_stopped")
         return ""
 
@@ -1576,10 +1563,9 @@ class App:
                     self.last = (v[0], v[1], time.strftime("%H:%M")); self.render_last()
                 elif kind == "engine": self.show_engine()
                 elif kind == "mode":
-                    self.autov.set(v == "auto"); self.set_btn(self.mini_auto, primary=v == "auto"); self.save()
                     if self.sc.running: self.sc.show_running()
                 elif kind == "keys":
-                    for n in ("scan_key", "auto_key"): self.keys[n].set(pretty_key(self.c[n]))
+                    self.keys["scan_key"].set(pretty_key(self.c["scan_key"]))
                     self.save()
                 elif kind == "running": self.render_state()
                 elif kind == "queue":
@@ -1597,23 +1583,16 @@ class App:
                 elif kind == "show":
                     self.root.deiconify(); self.root.lift()
                 elif kind == "cmd":
-                    if v in ("scan", "toggle"): self.sc.trigger(v)
+                    if v == "scan": self.sc.trigger(v)
                     elif v == "show": self.root.deiconify(); self.root.lift()
         except queue.Empty: pass
         self.root.after(80, self.pump)
 
     # ------------------------------------------------ Einstellungen
-    def auto_changed(self):
-        self.c["mode"] = "auto" if self.autov.get() else "hotkey"
-        self.set_btn(self.mini_auto, primary=self.autov.get())
-        self.apply()
-
     def read(self):
         self.c["url"] = self.url.get().strip().rstrip("/")
         self.c["code"] = self.code.get().strip().upper().replace(" ", "")
-        self.c["mode"] = "auto" if self.autov.get() else "hotkey"
-        try: self.c["interval"] = max(3, min(60, int(self.interval.get())))
-        except Exception: pass
+        self.c["mode"] = "hotkey"
         self.c["sounds"] = self.sounds.get(); self.c["notify"] = self.notif.get(); self.c["autostart"] = self.autost.get()
         self.c["topmost"] = self.topm.get()
         if not self.pinned:

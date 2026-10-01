@@ -1,0 +1,17 @@
+**Linux wieder wie 1.6.1, ohne Automatik.** Die Automatik aus 1.6.2 hat bei jedem Bild eine andere Station erkannt, darum ist sie unter Linux ganz raus. Gescannt wird wieder nur per Taste, mit der bewährten Erkennung aus 1.6.1.
+
+**Mehrere Bilder für ein Terminal.** Nach dem Drücken hörst du einen kurzen Ton, dann ist das Bild gemacht. Gibt es weiter unten mehr Waren, im Terminal runterscrollen und nochmal drücken, auch wenn das letzte Bild noch gelesen wird. Auf der Website kommen alle Bilder in denselben Scan Check, die Station vom ersten Bild gilt für alle. Am Ende einmal prüfen und übernehmen.
+
+Windows bleibt unverändert, die exe ist dieselbe wie in 1.6.1. Den Scan Check mit mehreren Bildern hat die Website für beide.
+
+**Welche Datei?**
+- `CargoDeckPriceCapture.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckPriceCapture-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+---
+
+**Linux back to 1.6.1, without auto mode.** Auto mode in 1.6.2 picked a different station for every screenshot, so it is gone on Linux. Scanning works by hotkey only again, with the proven recognition from 1.6.1.
+
+**Several screenshots for one terminal.** After pressing the key you hear a short sound, then the screenshot is taken. If there are more goods further down, scroll down in the terminal and press again, even while the last one is still being read. On the website all screenshots go into the same scan check, the station from the first one counts for all of them. At the end check once and apply.
+
+Windows is unchanged, the exe is the same as in 1.6.1. The website's scan check with several screenshots works for both.

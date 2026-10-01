@@ -16,13 +16,14 @@ Das Skript installiert Python mit Tk, Pillow, numpy, onnxruntime, Tesseract und 
 
 1. Auf der Website unter Einstellungen den Code kopieren und in der App eintragen.
 2. Start drücken.
-3. Im Spiel am Terminal **Strg + Ö** drücken, oder Automatik einschalten.
+3. Im Spiel am Terminal **Strg + Ö** drücken. Ein kurzer Ton sagt dir, dass das Bild gemacht ist.
+4. Mehr Waren weiter unten? Im Terminal runterscrollen und nochmal **Strg + Ö** drücken, so oft du willst. Auf der Website kommen alle Bilder in denselben Scan Check, am Ende einmal prüfen und übernehmen.
 
 **X11 und die meisten Spiele unter Proton oder Wine** nutzen die Tastenkürzel direkt.
 
 **Wayland (Fedora, KDE Plasma, GNOME 48 oder neuer, Hyprland):** Beim ersten Start fragt das System in einem Fenster nach den Tastenkürzeln, dort bestätigen. Ändern kannst du sie später in den Systemeinstellungen unter Tastenkürzel.
 
-**Älteres GNOME oder wenn kein Fenster kommt:** In den Systemeinstellungen ein eigenes Tastenkürzel anlegen mit dem Befehl `cargodeck-scanner --scan` (Automatik umschalten mit `--toggle`).
+**Älteres GNOME oder wenn kein Fenster kommt:** In den Systemeinstellungen ein eigenes Tastenkürzel anlegen mit dem Befehl `cargodeck-scanner --scan`.
 
 Screenshots gehen unter X11 direkt, unter Wayland über grim (Sway, Hyprland), spectacle (KDE) oder das System Portal (GNOME, fragt einmal nach der Erlaubnis). Mit "Screenshot testen" siehst du, was funktioniert.
 
@@ -36,4 +37,4 @@ Screenshots gehen unter X11 direkt, unter Wayland über grim (Sway, Hyprland), s
 
 Reads the Star Citizen trade terminal and sends prices and stock to Cargo Deck. Text recognition runs locally with Tesseract.
 
-Install with `./install.sh`, enter the code from the website settings, press Start, then press **Ctrl + Ö** at the terminal in game or turn on auto mode. On Wayland (KDE, GNOME 48+, Hyprland) the system asks once to confirm the shortcuts. On older GNOME, create a system keyboard shortcut with the command `cargodeck-scanner --scan`.
+Install with `./install.sh`, enter the code from the website settings, press Start, then press **Ctrl + Ö** at the terminal in game. A short sound tells you the screenshot is taken. More goods further down? Scroll down in the terminal and press **Ctrl + Ö** again. All screenshots go into the same scan check on the website, accept once at the end. On Wayland (KDE, GNOME 48+, Hyprland) the system asks once to confirm the shortcuts. On older GNOME, create a system keyboard shortcut with the command `cargodeck-scanner --scan`.
