@@ -1,0 +1,13 @@
+**Automatik unter Linux repariert.** Die Automatik hat vorher mit Tesseract geschaut, ob ein Terminal zu sehen ist. Tesseract erkennt die Schrift im Spiel oft nicht, dann sprang die Automatik nie an. Fehlte Tesseract ganz, blieb die Automatik nach dem ersten Versuch still stehen. Jetzt schaut sie mit PaddleOCR, der gleichen Erkennung wie beim Scan per Taste, und schickt dieses Ergebnis direkt weiter. Solange kein Terminal zu sehen ist, steht in der App, dass sie wartet.
+
+Windows bleibt unverändert, die exe ist dieselbe wie in 1.6.1.
+
+**Welche Datei?**
+- `CargoDeckPriceCapture.exe` ist für **Windows** 10 und 11. Einfach laden und starten, keine Installation.
+- `CargoDeckPriceCapture-linux.tar.gz` ist für **Linux**. Entpacken und `./install.sh` ausführen.
+
+---
+
+**Auto mode fixed on Linux.** Auto mode used Tesseract to check whether a terminal is visible. Tesseract often can't read the in game font, so auto mode never kicked in, and without Tesseract it stopped after the first try. It now checks with PaddleOCR, the same recognition as the hotkey scan, and sends that result right away. While no terminal is visible the app shows that it is waiting.
+
+Windows is unchanged, the exe is the same as in 1.6.1.

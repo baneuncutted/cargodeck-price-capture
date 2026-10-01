@@ -5,7 +5,7 @@
 import base64, io, json, math, os, queue, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request, wave
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.6.1"
+VERSION = "1.6.2"
 APP = "cargodeck-scanner"
 CODE_RE = re.compile(r"^[A-Z2-9]{12}$")
 TERMINAL_WORDS = re.compile(r"COMMODIT|SHOP INVENTOR|LOCAL MARKET|IN DEMAND|YOUR INVENTOR|SHOP QUANTIT", re.I)
@@ -100,6 +100,7 @@ TEXT = {
     "engine_tess": ("Neue Texterkennung fehlt, lese mit Tesseract. Bitte install.sh nochmal ausführen.", "New text recognition missing, reading with Tesseract. Please run install.sh again."),
     "auto_on": ("Automatik an, alle {n} Sekunden", "Auto on, every {n} seconds"),
     "auto_off": ("Automatik aus", "Auto off"),
+    "auto_wait": ("Automatik an, noch kein Terminal zu sehen", "Auto on, no terminal visible yet"),
     "saved": ("Gespeichert", "Saved"),
     "shot_ok": ("Screenshot mit {m}, {w} × {h} Pixel", "Screenshot with {m}, {w} × {h} pixels"),
     "shot_saved": ("Zum Anschauen gespeichert: {p}", "Saved for checking: {p}"),
@@ -1028,7 +1029,9 @@ class Scanner:
                 threading.Thread(target=self.ping, daemon=True).start()
             if self.c["mode"] == "auto" and not self.busy and now >= self.next_auto:
                 self.next_auto = now + self.c["interval"]
-                self.scan(True)
+                # Ein Fehler in einem Scan darf die Schleife nicht beenden, sonst läuft die Automatik still nicht mehr
+                try: self.scan(True)
+                except Exception as e: self.ui.log(T("ocr_fail") + f" {e}")
 
     def ping(self):
         """Meldet sich beim Server und sagt, ob die Website mit diesem Code gerade offen ist."""
@@ -1080,14 +1083,26 @@ class Scanner:
                 self.ui.log(str(e))
                 if not auto: self.ui.state(T("no_shot"), "bad"); play("err") if self.c["sounds"] else None
                 return
+            pre = None
             if auto:
                 fp = fingerprint(im)
                 if fp == self.last_print: return
                 self.last_print = fp
-                # erst kurz schauen, ob überhaupt ein Terminal zu sehen ist
-                quick = run_ocr([im], quick=True)
-                txt = " ".join(l["t"] for p in quick["passes"] for l in p["lines"])
-                if not TERMINAL_WORDS.search(txt): forget_monitor(); return
+                # erst schauen, ob überhaupt ein Terminal zu sehen ist. Mit PaddleOCR gleich richtig lesen und das Ergebnis behalten,
+                # Tesseract erkennt die Terminal Schrift oft nicht, dann sprang die Automatik nie an. Tesseract nur, wenn Paddle fehlt.
+                p = paddle()
+                try:
+                    if p: pre = p.read(im); quick = pre
+                    elif tesseract_ok(): quick = run_ocr([im], quick=True)
+                    else: return
+                except Exception as e:
+                    self.ui.log(T("ocr_fail") + f" {e}"); self.last_print = None; return
+                txt = " ".join(l["t"] for ps in quick["passes"] for l in ps["lines"])
+                if not (TERMINAL_WORDS.search(txt) or len(set(m.upper() for m in TERM_WORD.findall(txt))) >= 3):
+                    pre = None; forget_monitor()
+                    # damit man sieht, dass die Automatik läuft und nur auf ein Terminal wartet
+                    if time.time() - getattr(self, "wait_note", 0) > 30: self.wait_note = time.time(); self.ui.state(T("auto_wait"), "muted")
+                    return
             else:
                 self.ui.state(T("reading"), "warn")
             shots = [im]
@@ -1098,9 +1113,9 @@ class Scanner:
                 try: shots.append(screenshot(self.c.get("shot", "auto"), self.c.get("screen", "auto"))[0])
                 except Exception: break
             try:
-                ocr = None
+                ocr = pre
                 p = paddle()
-                if p:
+                if p and not ocr:
                     try: ocr = p.read(shots[0])
                     except Exception as e: self.ui.log(T("paddle_fail") + f" {e}")
                 if not ocr or not any(ps["lines"] for ps in ocr["passes"]): ocr = run_ocr(shots)
